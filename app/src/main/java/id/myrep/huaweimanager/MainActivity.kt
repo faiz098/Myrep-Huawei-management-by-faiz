@@ -25,6 +25,7 @@ class MainActivity : Activity() {
  private lateinit var login:Button
  private lateinit var progress:ProgressBar
  private lateinit var wifiPanel:LinearLayout
+ private lateinit var dashboardPanel:LinearLayout
  private val purple=Color.rgb(91,45,170)
  private val ink=Color.rgb(31,35,48)
  private val muted=Color.rgb(111,117,132)
@@ -41,6 +42,9 @@ class MainActivity : Activity() {
   hero.addView(label("Huawei Management",25,Color.WHITE,true))
   hero.addView(label("Kelola router dari jaringan WiFi rumah.",13,Color.WHITE))
   page.addView(hero,spacer(18))
+  dashboardPanel=card().apply{visibility=View.GONE}
+  dashboardPanel.addView(label("DASHBOARD ROUTER",15,ink,true),spacer(8))
+  page.addView(dashboardPanel,spacer(16))
   page.addView(label("Koneksi router",17,ink,true),spacer(10))
   val net=card();net.addView(fieldLabel("Alamat IP router"))
   ip=field("Contoh: 192.168.100.1").apply{setText(gateway())};net.addView(ip,spacer(10))
@@ -91,6 +95,29 @@ class MainActivity : Activity() {
  private fun show(s:String,ok:Boolean){status.text=s;status.setTextColor(if(ok)Color.rgb(27,117,76) else ink)}
  private fun busy(s:String){login.isEnabled=false;progress.visibility=View.VISIBLE;status.text=s}
 
+ private fun renderDashboard(routerIp:String, username:String, wifi:HuaweiLegacyClient.WifiReadResult?) {
+  dashboardPanel.removeAllViews()
+  dashboardPanel.visibility=View.VISIBLE
+  dashboardPanel.addView(label("DASHBOARD ROUTER",15,ink,true),spacer(8))
+  val details=listOf(
+   "Status koneksi" to "Login berhasil",
+   "IP router" to routerIp,
+   "Username" to username,
+   "Model perangkat" to "Belum terdeteksi dari firmware",
+   "Status internet" to "Belum diverifikasi"
+  )
+  details.forEach { (title,value) ->
+   val line=LinearLayout(this).apply{orientation=0;gravity=Gravity.CENTER_VERTICAL}
+   line.addView(label(title,12,muted),LinearLayout.LayoutParams(0,-2,1f))
+   line.addView(label(value,13,ink,true))
+   dashboardPanel.addView(line,spacer(7))
+  }
+  val ssids=wifi?.ssids.orEmpty()
+  dashboardPanel.addView(label("WiFi 2.4 GHz",12,purple,true),spacer(3))
+  dashboardPanel.addView(label(ssids.firstOrNull{it.startsWith("2.4 GHz:")}?.substringAfter(":")?.trim() ?: "Belum terbaca",14,ink,true),spacer(7))
+  dashboardPanel.addView(label("WiFi 5 GHz",12,purple,true),spacer(3))
+  dashboardPanel.addView(label(ssids.firstOrNull{it.startsWith("5 GHz:")}?.substringAfter(":")?.trim() ?: "Belum terbaca",14,ink,true))
+ }
  private fun renderWifiCandidates(items:List<String>){
   wifiPanel.removeAllViews()
   wifiPanel.visibility=View.VISIBLE
@@ -130,7 +157,7 @@ class MainActivity : Activity() {
     progress.visibility=View.GONE
     login.isEnabled=true
     show(auth.message + if(wifi!=null) "\n\n" + wifi.summary else "",auth.success)
-    if(wifi!=null) renderWifiCandidates(wifi.ssids)
+    if(auth.success) renderDashboard(h,u,wifi)\n    if(wifi!=null) renderWifiCandidates(wifi.ssids)
    }
   }
  }
