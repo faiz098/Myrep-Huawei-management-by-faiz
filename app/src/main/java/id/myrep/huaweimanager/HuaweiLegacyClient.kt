@@ -101,7 +101,7 @@ class HuaweiLegacyClient(hostInput: String) {
             val patterns = listOf(
                 Regex("(?is).{0,180}function\\s+(?:stWlanWifi|[^\\s(]*(?:wlan|ssid|wifi|psk|pwd|save|submit|init)[^\\s(]*)\\s*\\([^)]*\\).{0,700}"),
                 Regex("(?is).{0,180}(?:XMLHttpRequest|\\$\\.ajax|\\$\\.post|\\$\\.get|ajax\\s*\\().{0,500}"),
-                Regex("(?is).{0,180}(?:\.\.\/|\/)[^'\\\"\\s<>]*(?:wlan|wifi|ajax|asp|cgi)[^'\\\"\\s<>]*.{0,100}")
+                Regex("(?is).{0,180}(?:\\.\\./|/)[^'\\\"\\s<>]*(?:wlan|wifi|ajax|asp|cgi)[^'\\\"\\s<>]*.{0,100}")
             )
             patterns.forEach { pattern ->
                 pattern.findAll(source).take(16).forEach { match ->
