@@ -30,6 +30,13 @@ jobs:
           fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Apply maintained Kotlin source
+        shell: bash
+        run: |
+          mkdir -p "$PROJECT_DIR/app/src/main/java/id/myrep/huaweimanager"
+          cp app/src/main/java/id/myrep/huaweimanager/MainActivity.kt "$PROJECT_DIR/app/src/main/java/id/myrep/huaweimanager/MainActivity.kt"
+          cp app/src/main/java/id/myrep/huaweimanager/HuaweiLegacyClient.kt "$PROJECT_DIR/app/src/main/java/id/myrep/huaweimanager/HuaweiLegacyClient.kt"
+
       - name: Package extracted source for review
         shell: bash
         run: |
