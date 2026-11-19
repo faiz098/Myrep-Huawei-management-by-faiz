@@ -81,7 +81,7 @@ class HuaweiLegacyClient(hostInput: String) {
                         val type = attr(tag, "type") ?: "text"
                         val value = attr(tag, "value") ?: ""
                         val key = name.lowercase()
-                        val safeValue = if (key.contains("pass") || key.contains("psk") || key.contains("key")) "***" else value.take(70)
+                        val safeValue = if (key.contains("pass") || key.contains("psk") || key.contains("key") || key.contains("token") || key.contains("sid") || key.contains("cookie")) "***" else value.take(70)
                         fieldInventory.add("$name [type=$type, value=$safeValue]")
                         if (key.contains("ssid") && !key.contains("enable") && !key.contains("hide")) {
                             if (value.isNotBlank()) ssids.add("$name = $value")
@@ -97,9 +97,21 @@ class HuaweiLegacyClient(hostInput: String) {
                     }
                     val clueRegex = Regex("(?i).{0,65}(wlSsid|ssidName|WpaPsk|PreSharedKey|WlanBasic|wifiSsid).{0,90}")
                     clueRegex.findAll(r.body).take(25).forEach { hit ->
-                        val clue = hit.value.replace(Regex("(?i)(WpaPsk|PreSharedKey|password|passwd)([^,;{}]{0,50})"), "$1=***")
+                        val clue = hit.value.replace(Regex("(?i)(WpaPsk|PreSharedKey|password|passwd|onttoken|token)([^,;{}]{0,70})"), "$1=***")
                             .replace(Regex("[\\r\\n\\t]+"), " ").take(150)
                         scriptClues.add(clue)
+                    }
+                    listOf("wlSsid1", "wlSsid2", "getValue('wlWpaPsk", "getValue('wlKeys1", "WLANConfiguration", "SelHighBand").forEach { marker ->
+                        val at = r.body.indexOf(marker, ignoreCase = true)
+                        if (at >= 0) {
+                            val from = (at - 220).coerceAtLeast(0)
+                            val to = (at + 360).coerceAtMost(r.body.length)
+                            val context = r.body.substring(from, to)
+                                .replace(Regex("(?i)(PreSharedKey|WpaPsk|wlKeys[1-4]|onttoken|token)(\\\\s*[=:]\\\\s*['\\\"]?)[^'\\\";,}\\\\s<]+"), "$1$2***")
+                                .replace(Regex("[\\r\\n\\t]+"), " ")
+                                .take(420)
+                            scriptClues.add("KONTEKS[$marker]: $context")
+                        }
                     }
                 }
                 "$path -> HTTP ${r.code}, ${r.body.length} karakter, " +
