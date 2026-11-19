@@ -24,6 +24,7 @@ class MainActivity : Activity() {
  private lateinit var status:TextView
  private lateinit var login:Button
  private lateinit var progress:ProgressBar
+ private lateinit var wifiPanel:LinearLayout
  private val purple=Color.rgb(91,45,170)
  private val ink=Color.rgb(31,35,48)
  private val muted=Color.rgb(111,117,132)
@@ -72,6 +73,8 @@ class MainActivity : Activity() {
   progress=ProgressBar(this).apply{visibility=View.GONE};head.addView(progress,LinearLayout.LayoutParams(dp(22),dp(22)))
   box.addView(head);status=label("Belum ada pengujian. Masukkan akun router lalu tekan Login Huawei.",13,ink).apply{setPadding(0,dp(12),0,0)}
   box.addView(status);page.addView(box,spacer(16))
+  wifiPanel=card().apply{visibility=View.GONE}
+  page.addView(wifiPanel,spacer(16))
   page.addView(label("Catatan kompatibilitas",14,ink,true),spacer(6))
   page.addView(label("Firmware Huawei dari ISP dapat memakai metode autentikasi berbeda. Diagnostik akan menunjukkan tahap yang gagal. Aplikasi saat ini hanya membaca data, belum mengubah konfigurasi router.",12,muted))
   setContentView(root)
@@ -87,13 +90,44 @@ class MainActivity : Activity() {
  @Suppress("DEPRECATION") private fun gateway():String=try{val w=getSystemService(Context.WIFI_SERVICE) as WifiManager;val v=w.dhcpInfo.gateway;if(v==0)"" else listOf(0,8,16,24).joinToString("."){((v shr it) and 255).toString()}}catch(_:Exception){""}
  private fun show(s:String,ok:Boolean){status.text=s;status.setTextColor(if(ok)Color.rgb(27,117,76) else ink)}
  private fun busy(s:String){login.isEnabled=false;progress.visibility=View.VISIBLE;status.text=s}
+
+ private fun renderWifiCandidates(items:List<String>){
+  wifiPanel.removeAllViews()
+  wifiPanel.visibility=View.VISIBLE
+  wifiPanel.addView(label("INVENTARIS WLAN",15,ink,true),spacer(8))
+  if(items.isEmpty()){
+   wifiPanel.addView(label("Belum ada profil SSID yang dapat diekstrak.",13,muted))
+   return
+  }
+  items.forEach { item ->
+   val parts=item.split(":",limit=2)
+   val band=parts.firstOrNull()?.trim().orEmpty()
+   val ssid=parts.getOrNull(1)?.trim().orEmpty()
+   val row=LinearLayout(this).apply{orientation=1;setPadding(dp(12),dp(10),dp(12),dp(10));background=shape(Color.rgb(247,245,252),12)}
+   row.addView(label(band,12,purple,true))
+   row.addView(label(ssid,16,ink,true))
+   row.addView(label("Nilai dari WlanWifiArr. Belum diverifikasi sebagai SSID aktual router.",11,muted))
+   wifiPanel.addView(row,spacer(8))
+  }
+  wifiPanel.addView(label("Status: kandidat konfigurasi. Pembacaan data runtime dan penyimpanan perubahan belum tersedia.",11,muted))
+ }
  private fun host()=ip.text.toString().trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
  private fun valid(s:String)=s.isNotBlank()&&!s.contains('/')&&!s.contains(' ')&&!s.contains(':')
  private fun testConnection(){val h=host();if(!valid(h)){show("Masukkan IP router yang valid.",false);return};busy("Menguji koneksi...")
   worker.execute{val out=try{val a=InetAddress.getByName(h);if(!a.isSiteLocalAddress&&!a.isLoopbackAddress)error("Alamat bukan jaringan lokal");val c=URL("http://$h/").openConnection() as HttpURLConnection;c.connectTimeout=5000;c.readTimeout=5000;val code=c.responseCode;c.disconnect();"HTTP $code. Jalur jaringan tersedia, login belum terverifikasi."}catch(e:Exception){"Koneksi gagal: ${e.message}"};runOnUiThread{progress.visibility=View.GONE;login.isEnabled=true;show(out,out.startsWith("HTTP"))}}
  }
  private fun loginRouter(){val h=host();val u=user.text.toString().trim();val p=pass.text.toString();if(!valid(h)||u.isBlank()||p.isBlank()){show("Isi IP, username, dan password router.",false);return};busy("Memeriksa autentikasi Huawei...")
-  worker.execute{val c=HuaweiLegacyClient(h);val r=c.login(u,p);val w=if(r.success)"\n\nPEMBACAAN WLAN\n${c.readWifiSettings().summary}" else "";runOnUiThread{progress.visibility=View.GONE;login.isEnabled=true;show(r.message+w,r.success)}}
+  worker.execute{
+   val client=HuaweiLegacyClient(h)
+   val auth=client.login(u,p)
+   val wifi=if(auth.success) client.readWifiSettings() else null
+   runOnUiThread{
+    progress.visibility=View.GONE
+    login.isEnabled=true
+    show(auth.message + if(wifi!=null) "\n\nPembacaan halaman WLAN selesai." else "",auth.success)
+    if(wifi!=null) renderWifiCandidates(wifi.ssids)
+   }
+  }
  }
  override fun onDestroy(){worker.shutdownNow();super.onDestroy()}
 }
