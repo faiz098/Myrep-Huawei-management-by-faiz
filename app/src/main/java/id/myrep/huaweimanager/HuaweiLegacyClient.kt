@@ -137,19 +137,110 @@ class HuaweiLegacyClient(hostInput: String) {
             }
         }
 
+        val fullFunctionAudit = mutableListOf<String>()
+        val endpointAudit = linkedSetOf<String>()
+        val functionNames = listOf(
+            "SubmitForm", "addParameter1", "addParameter2", "addParameter3",
+            "webSubmitForm", "isBsdPskPwdChange", "CheckPskLenValid",
+            "SsidEnable", "ShowSsidEnable", "initWlanBasic", "initWlanCap",
+            "FirstRecordFor5G", "IsSetSsid5G", "isSetTriBand"
+        )
+        fun collectDeepAudit(label: String, source: String) {
+            functionNames.forEach { name ->
+                extractJsFunction(source, name)?.let { extracted ->
+                    fullFunctionAudit.add("===== $label :: $name =====\n\${redactJsSecrets(extracted)}")
+                }
+            }
+            Regex("""(?is)(?:set\.cgi|add\.cgi|del\.cgi|[A-Za-z0-9_./-]+\.asp(?:\?[^'"\s<>]*)?)[^'"\s<>]{0,300}""")
+                .findAll(source).take(100).forEach { endpointAudit.add(it.value) }
+            Regex("""(?is)(?:url\s*:\s*['"][^'"]+|setAction\s*\(\s*['"][^'"]+|RequestFile=[^'"\s<>]+)""")
+                .findAll(source).take(100).forEach { endpointAudit.add(it.value) }
+        }
+        collectDeepAudit("INLINE", inlineScript)
+        scripts.forEach { src ->
+            try {
+                val resolved = when {
+                    src.startsWith("http://", true) || src.startsWith("https://", true) -> src
+                    src.startsWith("/") -> base + src
+                    else -> base + pagePath.substringBeforeLast('/') + "/" + src
+                }
+                if (resolved.startsWith(base + "/", true)) {
+                    val r = request(resolved.removePrefix(base), "GET", null, false)
+                    if (r.code in 200..299) collectDeepAudit(src.substringAfterLast('/'), r.body)
+                }
+            } catch (_: Exception) { }
+        }
         val ssidLabels = ssids.joinToString("; ").ifBlank { "belum ditemukan" }
         val summary = buildString {
             append("HALAMAN WLAN: $pagePath (HTTP 200)\n")
-            append("Pemetaan profil dari WlanWifiArr: $ssidLabels\n")
+            append("Pemetaan profil WlanWifiArr (metadata, bukan runtime): $ssidLabels\n")
             append("File JavaScript eksternal:\n")
             append(scriptResults.take(30).joinToString("\n").ifBlank { "Tidak ada script eksternal terdeteksi." })
-            append("\n\nPETUNJUK FUNGSI / REQUEST (hasil audit statis, bukan runtime):\n")
-            append(inventory.take(55).joinToString("\n").ifBlank { "Belum ditemukan pola fungsi/request yang cocok." })
-            append("\n\nBATASAN: WlanWifiArr adalah metadata JavaScript. Nilai status radio, channel, bandwidth, mode, keamanan, dan password belum dianggap terbaca sampai ada respons runtime yang terverifikasi.")
+            append("\n\nFUNGSI JAVASCRIPT LENGKAP (ekstraksi statis, tidak dieksekusi):\n")
+            append(fullFunctionAudit.distinct().joinToString("\n\n").ifBlank { "Fungsi target belum ditemukan." })
+            append("\n\nENDPOINT / URL TERDETEKSI (bukan bukti request runtime):\n")
+            append(endpointAudit.take(100).joinToString("\n").ifBlank { "Belum ditemukan." })
+            append("\n\nPETUNJUK FUNGSI / REQUEST (hasil audit statis):\n")
+            append(inventory.take(45).joinToString("\n").ifBlank { "Belum ditemukan pola fungsi/request yang cocok." })
+            append("\n\nBATASAN: audit hanya membaca source HTML/JavaScript. Tidak menjalankan fungsi, tidak mengirim POST, dan tidak mengubah konfigurasi router. WlanWifiArr tetap dianggap metadata. Nilai runtime radio, channel, bandwidth, mode, keamanan, dan password belum terverifikasi.")
             append("\n\nJalur yang diperiksa:\n")
             append(attempts.joinToString("\n"))
         }
         return WifiReadResult(summary, ssids, emptyList())
+    }
+
+    // Extract a complete named JavaScript function without executing it.
+    // Tracks strings, comments, and nested braces.
+    private fun extractJsFunction(source: String, name: String): String? {
+        val declaration = Regex("""\bfunction\s+""" + Regex.escape(name) + """\s*\(""")
+        val match = declaration.find(source) ?: return null
+        val openBrace = source.indexOf('{', match.range.last + 1)
+        if (openBrace < 0) return null
+        var depth = 0
+        var quote: Char? = null
+        var escaped = false
+        var lineComment = false
+        var blockComment = false
+        var template = false
+        var i = openBrace
+        while (i < source.length) {
+            val c = source[i]
+            val next = if (i + 1 < source.length) source[i + 1] else '\u0000'
+            when {
+                lineComment -> if (c == '\n') lineComment = false
+                blockComment -> if (c == '*' && next == '/') { blockComment = false; i++ }
+                quote != null || template -> {
+                    if (escaped) escaped = false
+                    else if (c == '\\') escaped = true
+                    else if (template && c.code == 96) template = false
+                    else if (!template && c == quote) quote = null
+                }
+                c == '/' && next == '/' -> { lineComment = true; i++ }
+                c == '/' && next == '*' -> { blockComment = true; i++ }
+                c == '\'' || c == '"' -> quote = c
+                c.code == 96 -> template = true
+                c == '{' -> depth++
+                c == '}' -> {
+                    depth--
+                    if (depth == 0) return source.substring(match.range.first, i + 1)
+                }
+            }
+            i++
+        }
+        return null
+    }
+
+    private fun redactJsSecrets(code: String): String {
+        var safe = code
+        safe = safe.replace(
+            Regex("""(?is)((?:password|passwd|wpapsk|preSharedKey|wlKeys[1-4]|onttoken|token|sid)\s*[:=]\s*)(['"])[^'"]*\2"""),
+            "$1\"***\""
+        )
+        safe = safe.replace(
+            Regex("""(?is)((?:password|passwd|wpapsk|preSharedKey|wlKeys[1-4]|onttoken|token|sid)\s*[:=]\s*)[^,;\s}]+"""),
+            "$1***"
+        )
+        return safe.take(18000)
     }
 
     private fun parseWlanWifiArray(html: String): List<String> {
