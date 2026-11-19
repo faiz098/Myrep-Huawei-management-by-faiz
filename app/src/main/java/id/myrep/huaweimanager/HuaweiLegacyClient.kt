@@ -82,7 +82,7 @@ class HuaweiLegacyClient(hostInput: String) {
                         val type = attr(tag, "type") ?: "text"
                         val value = attr(tag, "value") ?: ""
                         val key = name.lowercase()
-                        val safeValue = if (key.contains("pass") || key.contains("psk") || key.contains("key") || key.contains("token") || key.contains("sid") || key.contains("cookie")) "***" else value.take(70)
+                        val safeValue = if (key.contains("pass") || key.contains("psk") || key.contains("key") || key.contains("token") || key == "sid" || key.contains("cookie")) "***" else value.take(70)
                         fieldInventory.add("$name [type=$type, value=$safeValue]")
                         if (key.contains("ssid") && !key.contains("enable") && !key.contains("hide")) {
                             if (value.isNotBlank()) ssids.add("$name = $value")
@@ -119,12 +119,54 @@ class HuaweiLegacyClient(hostInput: String) {
                     if (isLogin(r.body)) "halaman login" else preview(r.body, 65)
             } catch (e: Exception) { "$path -> ${e.javaClass.simpleName}" }
         }
+        // Huawei embeds WLANConfiguration and SSID metadata in WlanWifiArr.
+        val firstWlanPage = paths.asSequence().mapNotNull { candidate ->
+            try {
+                request(candidate, "GET", null, false).takeIf {
+                    it.code in 200..299 && !isLogin(it.body)
+                }?.body
+            } catch (_: Exception) { null }
+        }.firstOrNull().orEmpty()
+        parseWlanWifiArray(firstWlanPage).forEach { ssids.add(it) }
+
         val summary = details.joinToString("\n") +
             "\n\nSSID ditemukan: " + (if (ssids.isEmpty()) "belum ditemukan" else ssids.joinToString("; ")) +
             "\nField kunci WiFi: " + (if (keys.isEmpty()) "belum teridentifikasi" else keys.joinToString("; ")) +
             "\n\nINVENTARIS FIELD (nilai sensitif disamarkan):\n" + fieldInventory.take(45).joinToString("\\n") +
             "\n\nPETUNJUK SCRIPT: " + contextClues.take(12).joinToString(" | ") + "\nPETUNJUK UMUM: " + scriptClues.take(6).joinToString(" | ")
         return WifiReadResult(summary, ssids.toList(), keys.toList())
+    }
+
+
+    private fun parseWlanWifiArray(html: String): List<String> {
+        if (html.isBlank()) return emptyList()
+        val body = Regex("(?is)WlanWifiArr\\s*=\\s*new\\s+Array\\((.*?)\\);")
+            .find(html)?.groupValues?.get(1) ?: return emptyList()
+        val constructors = Regex("(?is)new\\s+stWlanWifi\\((.*?)\\)")
+        val quoted = Regex("""("(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*')""")
+        val result = linkedSetOf<String>()
+        constructors.findAll(body).forEach { match ->
+            val args = quoted.findAll(match.groupValues[1]).map { token ->
+                token.value.substring(1, token.value.length - 1)
+                    .replace(Regex("""\\\\x([0-9a-fA-F]{2})""")) { m ->
+                        m.groupValues[1].toInt(16).toChar().toString()
+                    }
+                    .replace("\\\\", "\\")
+            }.toList()
+            if (args.size >= 5) {
+                val path = args[0]
+                val ssid = args[3].trim()
+                val band = when {
+                    path.contains("WLANConfiguration.1") -> "2.4 GHz"
+                    path.contains("WLANConfiguration.5") -> "5 GHz"
+                    else -> "WLAN"
+                }
+                if (ssid.isNotBlank() && !ssid.equals("undefined", true) && !ssid.equals("null", true)) {
+                    result.add("$band: $ssid")
+                }
+            }
+        }
+        return result.toList()
     }
 
     private fun request(path: String, method: String, data: String?, anonymous: Boolean): HttpResult {
