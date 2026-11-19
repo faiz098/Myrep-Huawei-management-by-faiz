@@ -41,6 +41,17 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Align Kotlin and Java JVM targets
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+          if [ -f app/build.gradle.kts ]; then
+            printf '\nkotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8) } }\n' >> app/build.gradle.kts
+          else
+            echo "::error::Expected app/build.gradle.kts was not found."
+            exit 1
+          fi
+
       - name: Build debug APK
         shell: bash
         run: |
