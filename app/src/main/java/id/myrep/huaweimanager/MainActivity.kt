@@ -94,22 +94,27 @@ class MainActivity : Activity() {
  private fun renderWifiCandidates(items:List<String>){
   wifiPanel.removeAllViews()
   wifiPanel.visibility=View.VISIBLE
-  wifiPanel.addView(label("INVENTARIS WLAN",15,ink,true),spacer(8))
-  if(items.isEmpty()){
-   wifiPanel.addView(label("Belum ada profil SSID yang dapat diekstrak.",13,muted))
-   return
+  wifiPanel.addView(label("PENGELOLAAN WI-FI",15,ink,true),spacer(8))
+  val bands=listOf("2.4 GHz","5 GHz")
+  bands.forEach { band ->
+   val match=items.firstOrNull{it.startsWith("$band:")}
+   val ssid=match?.substringAfter(":")?.trim().orEmpty()
+   val row=LinearLayout(this).apply{orientation=1;setPadding(dp(14),dp(13),dp(14),dp(13));background=shape(Color.rgb(247,245,252),14)}
+   row.addView(label(band,14,purple,true),spacer(5))
+   row.addView(label(if(ssid.isBlank()) "SSID belum ditemukan" else ssid,17,ink,true),spacer(8))
+   row.addView(label("Status Wi-Fi: belum diverifikasi",12,muted))
+   row.addView(label("Channel / bandwidth: belum diverifikasi",12,muted))
+   row.addView(label("Mode / security: belum diverifikasi",12,muted))
+   row.addView(label("Password: tidak dibaca demi keamanan; kemampuan firmware belum diverifikasi",12,muted),spacer(8))
+   val actions=LinearLayout(this).apply{orientation=0}
+   listOf("Edit SSID","Edit Password","Simpan").forEach { title ->
+    val b=button(title,false).apply{isEnabled=false;alpha=0.48f;textSize=10f}
+    actions.addView(b,LinearLayout.LayoutParams(0,dp(42),1f).apply{if(title!="Edit SSID")leftMargin=dp(5)})
+   }
+   row.addView(actions)
+   wifiPanel.addView(row,spacer(10))
   }
-  items.forEach { item ->
-   val parts=item.split(":",limit=2)
-   val band=parts.firstOrNull()?.trim().orEmpty()
-   val ssid=parts.getOrNull(1)?.trim().orEmpty()
-   val row=LinearLayout(this).apply{orientation=1;setPadding(dp(12),dp(10),dp(12),dp(10));background=shape(Color.rgb(247,245,252),12)}
-   row.addView(label(band,12,purple,true))
-   row.addView(label(ssid,16,ink,true))
-   row.addView(label("SSID terdeteksi dari WlanWifiArr pada halaman konfigurasi Huawei.",11,muted))
-   wifiPanel.addView(row,spacer(8))
-  }
-  wifiPanel.addView(label("Catatan: SSID berhasil diekstrak dari metadata WLAN. Status radio dan protokol simpan konfigurasi belum diverifikasi, sehingga fitur ubah belum diaktifkan.",11,muted))
+  wifiPanel.addView(label("Tombol perubahan belum diaktifkan. Firmware belum mengungkap dan memverifikasi endpoint serta parameter simpan. Aplikasi tidak mengirim perubahan ke router.",11,muted))
  }
  private fun host()=ip.text.toString().trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
  private fun valid(s:String)=s.isNotBlank()&&!s.contains('/')&&!s.contains(' ')&&!s.contains(':')
