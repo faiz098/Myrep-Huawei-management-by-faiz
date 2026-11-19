@@ -148,7 +148,7 @@ class HuaweiLegacyClient(hostInput: String) {
         constructors.findAll(body).forEach { match ->
             val args = quoted.findAll(match.groupValues[1]).map { token ->
                 token.value.substring(1, token.value.length - 1)
-                    .replace(Regex("""\\\\x([0-9a-fA-F]{2})""")) { m ->
+                    .replace(Regex("""\\x([0-9a-fA-F]{2})""")) { m ->
                         m.groupValues[1].toInt(16).toChar().toString()
                     }
                     .replace("\\\\", "\\")
