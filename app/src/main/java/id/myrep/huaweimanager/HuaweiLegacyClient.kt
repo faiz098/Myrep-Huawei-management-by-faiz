@@ -143,7 +143,7 @@ class HuaweiLegacyClient(hostInput: String) {
         val body = Regex("(?is)WlanWifiArr\\s*=\\s*new\\s+Array\\((.*?)\\);")
             .find(html)?.groupValues?.get(1) ?: return emptyList()
         val constructors = Regex("(?is)new\\s+stWlanWifi\\((.*?)\\)")
-        val quoted = Regex("""("(?:\.|[^"\])*"|'(?:\.|[^'\])*')""")
+        val quoted = Regex("""("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')""")
         val result = linkedSetOf<String>()
         constructors.findAll(body).forEach { match ->
             val args = quoted.findAll(match.groupValues[1]).map { token ->
