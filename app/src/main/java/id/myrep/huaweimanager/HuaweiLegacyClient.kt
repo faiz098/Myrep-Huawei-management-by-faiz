@@ -115,7 +115,7 @@ class HuaweiLegacyClient(hostInput: String) {
                 pattern.findAll(source).take(16).forEach { match ->
                     val safe = match.value
                         .replace(Regex("(?i)(password|passwd|wpapsk|preSharedKey|wlKeys[1-4])\\s*([=:]\\s*['\\\"]?)[^'\\\";,}\\s<]+"), "$1$2***")
-                        .replace(Regex("[\\r\\n\\t]+"), " ")
+                        .replace(Regex("[\\r\n\\t]+"), " ")
                         .take(520)
                     inventory.add("$label: $safe")
                 }
@@ -195,23 +195,23 @@ class HuaweiLegacyClient(hostInput: String) {
         val ssidLabels = ssids.joinToString("; ").ifBlank { "belum ditemukan" }
         val ssidSource = if (!formSsid24.isNullOrBlank() || !formSsid5.isNullOrBlank()) "nilai input form HTML firmware" else "fallback WlanWifiArr (metadata statis, bukan runtime)"
         val summary = buildString {
-            append("AUDIT TERFOKUS: JALUR SIMPAN WIFI HUAWEI\\n")
-            append("Router page: $pagePath (HTTP 200)\\n")
-            append("SSID terdeteksi: $ssidLabels\\n")
-            append("Sumber SSID: $ssidSource\\n")
-            append("FUNGSI YANG DIMINTA SAJA (source JavaScript, tidak dieksekusi):\\n")
+            append("AUDIT TERFOKUS: JALUR SIMPAN WIFI HUAWEI\n")
+            append("Router page: $pagePath (HTTP 200)\n")
+            append("SSID terdeteksi: $ssidLabels\n")
+            append("Sumber SSID: $ssidSource\n")
+            append("FUNGSI YANG DIMINTA SAJA (source JavaScript, tidak dieksekusi):\n")
             val selected = fullFunctionAudit.distinct()
-            append(selected.joinToString("\\n\\n").ifBlank {
+            append(selected.joinToString("\n\n").ifBlank {
                 "Fungsi target belum ditemukan pada JavaScript yang berhasil dibaca."
             })
-            append("\\n\\nRINGKASAN KELENGKAPAN:\\n")
+            append("\n\nRINGKASAN KELENGKAPAN:\n")
             functionNames.forEach { name ->
                 val found = selected.any { it.contains(":: $name (") }
-                append("$name: ${if (found) "DITEMUKAN" else "TIDAK DITEMUKAN"}\\n")
+                append("$name: ${if (found) "DITEMUKAN" else "TIDAK DITEMUKAN"}\n")
             }
-            append("\\nBATASAN: audit hanya mengekstrak enam fungsi di atas. Tidak menjalankan JavaScript, tidak mengirim POST, dan tidak mengubah router. Nilai rahasia disamarkan otomatis.")
-            append("\\n\\nSUMBER JAVASCRIPT YANG DIPERIKSA:\\n")
-            append(scriptResults.joinToString("\\n").ifBlank { "Tidak ada sumber JavaScript eksternal." })
+            append("\nBATASAN: audit hanya mengekstrak enam fungsi di atas. Tidak menjalankan JavaScript, tidak mengirim POST, dan tidak mengubah router. Nilai rahasia disamarkan otomatis.")
+            append("\n\nSUMBER JAVASCRIPT YANG DIPERIKSA:\n")
+            append(scriptResults.joinToString("\n").ifBlank { "Tidak ada sumber JavaScript eksternal." })
         }
         return WifiReadResult(summary, ssids, emptyList())
     }
@@ -356,6 +356,6 @@ class HuaweiLegacyClient(hostInput: String) {
 
     private fun isLogin(s: String) = s.contains("login.cgi", true) || s.contains("name=\"username\"", true) || s.contains("name=\"password\"", true)
     private fun attr(tag: String, key: String): String? = Regex("(?is)\\b" + Regex.escape(key) + "\\s*=\\s*(['\"])(.*?)\\1").find(tag)?.groupValues?.get(2)
-    private fun preview(s: String, n: Int = 130) = s.replace(Regex("[\\r\\n\\t]+"), " ").replace(Regex("(?i)(password|passwd|token|sid)\\s*[:=]\\s*[^&\\s<]+"), "$1=***").take(n).ifBlank { "(kosong)" }
+    private fun preview(s: String, n: Int = 130) = s.replace(Regex("[\\r\n\\t]+"), " ").replace(Regex("(?i)(password|passwd|token|sid)\\s*[:=]\\s*[^&\\s<]+"), "$1=***").take(n).ifBlank { "(kosong)" }
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 }
