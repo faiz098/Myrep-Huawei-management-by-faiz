@@ -157,7 +157,8 @@ class MainActivity : Activity() {
     progress.visibility=View.GONE
     login.isEnabled=true
     show(auth.message + if(wifi!=null) "\n\n" + wifi.summary else "",auth.success)
-    if(auth.success) renderDashboard(h,u,wifi)\n    if(wifi!=null) renderWifiCandidates(wifi.ssids)
+    if(auth.success) renderDashboard(h,u,wifi)
+    if(wifi!=null) renderWifiCandidates(wifi.ssids)
    }
   }
  }
