@@ -147,11 +147,15 @@ class HuaweiLegacyClient(hostInput: String) {
 
         val fullFunctionAudit = mutableListOf<String>()
         val endpointAudit = linkedSetOf<String>()
+        // Focused write-path audit only. Keep this list deliberately small so
+        // the result can be copied from the app without unrelated firmware noise.
         val functionNames = listOf(
-            "SubmitForm", "addParameter1", "addParameter2", "addParameter3",
-            "AddParameter5G", "AddParaForCover", "webSubmitForm", "addParameter",
-            "isBsdPskPwdChange", "CheckPskLenValid", "SsidEnable", "ShowSsidEnable",
-            "initWlanBasic", "initWlanCap", "FirstRecordFor5G", "IsSetSsid5G", "isSetTriBand"
+            "SubmitForm",
+            "webSubmitForm",
+            "addParameter1",
+            "addParameter2",
+            "AddParameter5G",
+            "AddParaForCover"
         )
         fun collectDeepAudit(label: String, source: String) {
             functionNames.forEach { name ->
@@ -159,10 +163,8 @@ class HuaweiLegacyClient(hostInput: String) {
                     fullFunctionAudit.add("===== $label :: $name (${extracted.length} karakter) =====\n" + redactJsSecrets(extracted).take(30000) + if (extracted.length > 30000) "\n[Dipangkas pada 30.000 karakter]" else "")
                 }
             }
-            Regex("""(?is)(?:set\.cgi|add\.cgi|del\.cgi|[A-Za-z0-9_./-]+\.asp(?:\?[^'"\s<>]*)?)[^'"\s<>]{0,300}""")
-                .findAll(source).take(100).forEach { endpointAudit.add(it.value) }
-            Regex("""(?is)(?:url\s*:\s*['"][^'"]+|setAction\s*\(\s*['"][^'"]+|RequestFile=[^'"\s<>]+)""")
-                .findAll(source).take(100).forEach { endpointAudit.add(it.value) }
+            // Endpoint clues are retained internally only when found inside
+            // the six selected functions; unrelated endpoints are not printed.
         }
         collectDeepAudit("INLINE", inlineScript)
         scripts.forEach { src ->
@@ -192,27 +194,24 @@ class HuaweiLegacyClient(hostInput: String) {
 
         val ssidLabels = ssids.joinToString("; ").ifBlank { "belum ditemukan" }
         val ssidSource = if (!formSsid24.isNullOrBlank() || !formSsid5.isNullOrBlank()) "nilai input form HTML firmware" else "fallback WlanWifiArr (metadata statis, bukan runtime)"
-        val deviceClues = endpointAudit.filter {
-            Regex("(?i)(device|host|associated|association|sta|dhcp|arp|client)").containsMatchIn(it)
-        }.take(60)
         val summary = buildString {
-            append("HALAMAN WLAN: $pagePath (HTTP 200)\n")
-            append("SSID terdeteksi: $ssidLabels\n")
-            append("Sumber SSID: $ssidSource\n")
-            append("Kandidat endpoint/perintah perangkat terhubung (audit statis, belum terbukti):\n")
-            append(deviceClues.joinToString("\n").ifBlank { "Belum ditemukan pada HTML/JavaScript WLAN yang diperiksa." })
-            append("\n\nPemetaan profil WlanWifiArr (metadata): ${metadataSsids.joinToString("; ").ifBlank { "tidak tersedia" }}\n")
-            append("File JavaScript eksternal:\n")
-            append(scriptResults.take(30).joinToString("\n").ifBlank { "Tidak ada script eksternal terdeteksi." })
-            append("\n\nFUNGSI JAVASCRIPT LENGKAP (ekstraksi statis, tidak dieksekusi):\n")
-            append(fullFunctionAudit.distinct().joinToString("\n\n").ifBlank { "Fungsi target belum ditemukan." })
-            append("\n\nENDPOINT / URL TERDETEKSI (bukan bukti request runtime):\n")
-            append(endpointAudit.take(100).joinToString("\n").ifBlank { "Belum ditemukan." })
-            append("\n\nPETUNJUK FUNGSI / REQUEST (hasil audit statis):\n")
-            append(inventory.take(45).joinToString("\n").ifBlank { "Belum ditemukan pola fungsi/request yang cocok." })
-            append("\n\nBATASAN: audit hanya membaca source HTML/JavaScript. Tidak menjalankan fungsi, tidak mengirim POST, dan tidak mengubah konfigurasi router. WlanWifiArr tetap dianggap metadata. Nilai runtime radio, channel, bandwidth, mode, keamanan, dan password belum terverifikasi.")
-            append("\n\nJalur yang diperiksa:\n")
-            append(attempts.joinToString("\n"))
+            append("AUDIT TERFOKUS: JALUR SIMPAN WIFI HUAWEI\\n")
+            append("Router page: $pagePath (HTTP 200)\\n")
+            append("SSID terdeteksi: $ssidLabels\\n")
+            append("Sumber SSID: $ssidSource\\n")
+            append("FUNGSI YANG DIMINTA SAJA (source JavaScript, tidak dieksekusi):\\n")
+            val selected = fullFunctionAudit.distinct()
+            append(selected.joinToString("\\n\\n").ifBlank {
+                "Fungsi target belum ditemukan pada JavaScript yang berhasil dibaca."
+            })
+            append("\\n\\nRINGKASAN KELENGKAPAN:\\n")
+            functionNames.forEach { name ->
+                val found = selected.any { it.contains(":: $name (") }
+                append("$name: ${if (found) "DITEMUKAN" else "TIDAK DITEMUKAN"}\\n")
+            }
+            append("\\nBATASAN: audit hanya mengekstrak enam fungsi di atas. Tidak menjalankan JavaScript, tidak mengirim POST, dan tidak mengubah router. Nilai rahasia disamarkan otomatis.")
+            append("\\n\\nSUMBER JAVASCRIPT YANG DIPERIKSA:\\n")
+            append(scriptResults.joinToString("\\n").ifBlank { "Tidak ada sumber JavaScript eksternal." })
         }
         return WifiReadResult(summary, ssids, emptyList())
     }
