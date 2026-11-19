@@ -61,29 +61,56 @@ class HuaweiLegacyClient(hostInput: String) {
     }
 
     fun readWifiSettings(): WifiReadResult {
-        val paths = listOf("/html/bbsp/wlan/wlanbasic.asp", "/html/amp/wlanbasic/wlan.asp", "/html/amp/wlanbasic/WlanBasic.asp", "/html/bbsp/wlan/wlan.asp")
+        val paths = listOf(
+            "/html/amp/wlanbasic/WlanBasic.asp",
+            "/html/bbsp/wlan/wlanbasic.asp",
+            "/html/amp/wlanbasic/wlan.asp",
+            "/html/bbsp/wlan/wlan.asp"
+        )
         val ssids = linkedSetOf<String>()
         val keys = linkedSetOf<String>()
+        val fieldInventory = linkedSetOf<String>()
+        val scriptClues = linkedSetOf<String>()
         val details = paths.map { path ->
             try {
                 val r = request(path, "GET", null, false)
                 if (r.code in 200..299 && !isLogin(r.body)) {
-                    Regex("(?is)<input\\b[^>]*>").findAll(r.body).forEach { m ->
+                    Regex("(?is)<input\\\\b[^>]*>").findAll(r.body).forEach { m ->
                         val tag = m.value
-                        val name = attr(tag, "name") ?: attr(tag, "id")
-                        val value = attr(tag, "value")
-                        if (name != null && value != null) {
-                            val k = name.lowercase()
-                            if (k.contains("ssid")) ssids.add(name + " = " + value)
-                            if (k.contains("wpa") || k.contains("pre_shared") || k.contains("keypass")) keys.add(name + " = " + value)
+                        val name = attr(tag, "name") ?: attr(tag, "id") ?: "(tanpa nama)"
+                        val type = attr(tag, "type") ?: "text"
+                        val value = attr(tag, "value") ?: ""
+                        val key = name.lowercase()
+                        val safeValue = if (key.contains("pass") || key.contains("psk") || key.contains("key")) "***" else value.take(70)
+                        fieldInventory.add("$name [type=$type, value=$safeValue]")
+                        if (key.contains("ssid") && !key.contains("enable") && !key.contains("hide")) {
+                            if (value.isNotBlank()) ssids.add("$name = $value")
+                        }
+                        if (key.contains("wpa") || key.contains("pre_shared") || key.contains("keypass")) {
+                            if (value.isNotBlank() && !value.equals("on", true) && !value.equals("off", true)) keys.add("$name = *** (field terdeteksi)")
                         }
                     }
+                    Regex("(?is)<select\\\\b[^>]*>").findAll(r.body).forEach { m ->
+                        val tag = m.value
+                        val name = attr(tag, "name") ?: attr(tag, "id") ?: "(select)"
+                        fieldInventory.add("$name [select]")
+                    }
+                    val clueRegex = Regex("(?i).{0,65}(wlSsid|ssidName|WpaPsk|PreSharedKey|WlanBasic|wifiSsid).{0,90}")
+                    clueRegex.findAll(r.body).take(25).forEach { hit ->
+                        val clue = hit.value.replace(Regex("(?i)(WpaPsk|PreSharedKey|password|passwd)([^,;{}]{0,50})"), "$1=***")
+                            .replace(Regex("[\\r\\n\\t]+"), " ").take(150)
+                        scriptClues.add(clue)
+                    }
                 }
-                path + " -> HTTP " + r.code + ", " + r.body.length + " karakter, " + if (isLogin(r.body)) "halaman login" else preview(r.body, 65)
-            } catch (e: Exception) { path + " -> " + e.javaClass.simpleName }
+                "$path -> HTTP ${r.code}, ${r.body.length} karakter, " +
+                    if (isLogin(r.body)) "halaman login" else preview(r.body, 65)
+            } catch (e: Exception) { "$path -> ${e.javaClass.simpleName}" }
         }
-        val summary = details.joinToString("\n") + "\n\nSSID: " + (if (ssids.isEmpty()) "belum ditemukan" else ssids.joinToString("; ")) +
-            "\nField password: " + (if (keys.isEmpty()) "belum ditemukan / disembunyikan" else keys.joinToString("; "))
+        val summary = details.joinToString("\\n") +
+            "\\n\\nSSID ditemukan: " + (if (ssids.isEmpty()) "belum ditemukan" else ssids.joinToString("; ")) +
+            "\\nField kunci WiFi: " + (if (keys.isEmpty()) "belum teridentifikasi" else keys.joinToString("; ")) +
+            "\\n\\nINVENTARIS FIELD (nilai sensitif disamarkan):\\n" + fieldInventory.take(45).joinToString("\\n") +
+            "\\n\\nPETUNJUK SCRIPT: " + scriptClues.take(12).joinToString(" | ")
         return WifiReadResult(summary, ssids.toList(), keys.toList())
     }
 
