@@ -148,7 +148,7 @@ class HuaweiLegacyClient(hostInput: String) {
         fun collectDeepAudit(label: String, source: String) {
             functionNames.forEach { name ->
                 extractJsFunction(source, name)?.let { extracted ->
-                    fullFunctionAudit.add("===== $label :: $name =====\n\${redactJsSecrets(extracted)}")
+                    fullFunctionAudit.add("===== $label :: $name (${extracted.length} karakter) =====\\n" + redactJsSecrets(extracted).take(8000) + if (extracted.length > 8000) "\\n[Dipangkas pada 8.000 karakter; fungsi lengkap tersedia di source firmware]" else "")
                 }
             }
             Regex("""(?is)(?:set\.cgi|add\.cgi|del\.cgi|[A-Za-z0-9_./-]+\.asp(?:\?[^'"\s<>]*)?)[^'"\s<>]{0,300}""")
