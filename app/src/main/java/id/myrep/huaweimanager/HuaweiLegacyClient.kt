@@ -89,7 +89,15 @@ class HuaweiLegacyClient(hostInput: String) {
             )
         }
 
-        val ssids = parseWlanWifiArray(page)
+        // Prefer values populated into the firmware WLAN form; use static metadata only as fallback.
+        val metadataSsids = parseWlanWifiArray(page)
+        val formSsid24 = findInputValue(page, "wlSsid1")
+        val formSsid5 = findInputValue(page, "wlSsid2")
+        val ssids = buildList {
+            if (!formSsid24.isNullOrBlank()) add("2.4 GHz: $formSsid24")
+            if (!formSsid5.isNullOrBlank()) add("5 GHz: $formSsid5")
+            if (isEmpty()) addAll(metadataSsids)
+        }
         val inventory = linkedSetOf<String>()
         val scripts = Regex("(?is)<script\\b[^>]*src\\s*=\\s*(['\\\"])(.*?)\\1[^>]*>")
             .findAll(page).mapNotNull { it.groupValues[2].trim().takeIf(String::isNotBlank) }
@@ -171,9 +179,17 @@ class HuaweiLegacyClient(hostInput: String) {
             } catch (_: Exception) { }
         }
         val ssidLabels = ssids.joinToString("; ").ifBlank { "belum ditemukan" }
+        val ssidSource = if (!formSsid24.isNullOrBlank() || !formSsid5.isNullOrBlank()) "nilai input form HTML firmware" else "fallback WlanWifiArr (metadata statis, bukan runtime)"
+        val deviceClues = endpointAudit.filter {
+            Regex("(?i)(device|host|associated|association|sta|dhcp|arp|client)").containsMatchIn(it)
+        }.take(60)
         val summary = buildString {
             append("HALAMAN WLAN: $pagePath (HTTP 200)\n")
-            append("Pemetaan profil WlanWifiArr (metadata, bukan runtime): $ssidLabels\n")
+            append("SSID terdeteksi: $ssidLabels\n")
+            append("Sumber SSID: $ssidSource\n")
+            append("Kandidat endpoint/perintah perangkat terhubung (audit statis, belum terbukti):\n")
+            append(deviceClues.joinToString("\n").ifBlank { "Belum ditemukan pada HTML/JavaScript WLAN yang diperiksa." })
+            append("\n\nPemetaan profil WlanWifiArr (metadata): ${metadataSsids.joinToString("; ").ifBlank { "tidak tersedia" }}\n")
             append("File JavaScript eksternal:\n")
             append(scriptResults.take(30).joinToString("\n").ifBlank { "Tidak ada script eksternal terdeteksi." })
             append("\n\nFUNGSI JAVASCRIPT LENGKAP (ekstraksi statis, tidak dieksekusi):\n")
@@ -241,6 +257,22 @@ class HuaweiLegacyClient(hostInput: String) {
             "$1***"
         )
         return safe.take(50000)
+    }
+
+    private fun findInputValue(html: String, fieldName: String): String? {
+        val tags = Regex("(?is)<input\\b[^>]*>").findAll(html)
+        for (match in tags) {
+            val tag = match.value
+            val name = attr(tag, "name") ?: attr(tag, "id")
+            if (name.equals(fieldName, true)) {
+                val value = attr(tag, "value")?.trim().orEmpty()
+                if (value.isNotBlank() && !value.equals("undefined", true) && !value.equals("null", true)) {
+                    return value.replace("&amp;", "&").replace("&quot;", "\\\"")
+                        .replace("&#39;", "'").replace("&lt;", "<").replace("&gt;", ">")
+                }
+            }
+        }
+        return null
     }
 
     private fun parseWlanWifiArray(html: String): List<String> {
