@@ -3,10 +3,8 @@ package id.myrep.huaweimanager
 import android.util.Base64
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.net.CookieHandler
-import java.net.CookieManager
-import java.net.CookiePolicy
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -14,9 +12,9 @@ import java.nio.charset.StandardCharsets
 class HuaweiLegacyClient(hostInput: String) {
     private val host = hostInput.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
     private val base = "http://" + host
-    private val cookies = CookieManager(null, CookiePolicy.ACCEPT_ALL)
+    // Cookie storage is scoped to this router client. No JVM-global CookieHandler.
+    private val cookieHeaders = linkedMapOf<String, String>()
     private var sessionToken: String? = null
-    init { CookieHandler.setDefault(cookies) }
 
     data class LoginResult(val success: Boolean, val message: String)
     data class WifiReadResult(val summary: String, val ssids: List<String>, val passwordFields: List<String>)
@@ -25,7 +23,7 @@ class HuaweiLegacyClient(hostInput: String) {
     fun login(username: String, password: String): LoginResult {
         if (host.isBlank() || username.isBlank() || password.isBlank()) return LoginResult(false, "IP, username, dan password wajib diisi.")
         return try {
-            cookies.cookieStore.removeAll()
+            cookieHeaders.clear()
             val tokenReply = request("/asp/GetRandCount.asp", "POST", null, true)
             val token = tokenReply.body.removePrefix("\uFEFF").trim()
             if (token.isBlank() || token.length > 256 || token.contains('<') || token.contains(' ')) {
@@ -35,10 +33,10 @@ class HuaweiLegacyClient(hostInput: String) {
             val form = listOf("UserName" to username, "PassWord" to encoded, "Language" to "english", "x.X_HW_Token" to token)
                 .joinToString("&") { (k, v) -> enc(k) + "=" + enc(v) }
             val reply = request("/login.cgi", "POST", form, true)
-            val cookieNames = cookies.cookieStore.cookies.joinToString { it.name }.ifBlank { "tidak ada" }
-            val cookieOk = cookies.cookieStore.cookies.any {
-                (it.name.equals("Cookie", true) && it.value.contains("sid=", true) && !it.value.contains("id=-1", true)) ||
-                (it.name.equals("sid", true) && it.value.isNotBlank())
+            val cookieNames = cookieHeaders.keys.joinToString().ifBlank { "tidak ada" }
+            val cookieOk = cookieHeaders.any { (name, value) ->
+                (name.equals("Cookie", true) && value.contains("sid=", true) && !value.contains("id=-1", true)) ||
+                (name.equals("sid", true) && value.isNotBlank())
             }
             val headerOk = reply.setCookie.any { it.contains("sid=", true) && !it.contains("id=-1", true) }
             if (cookieOk || headerOk) {
@@ -180,7 +178,11 @@ class HuaweiLegacyClient(hostInput: String) {
             setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36")
             setRequestProperty("Connection", "keep-alive")
             setRequestProperty("Referer", base + "/")
-            if (anonymous) setRequestProperty("Cookie", "Cookie=body:Language:english:id=-1")
+            if (anonymous) {
+                setRequestProperty("Cookie", "Cookie=body:Language:english:id=-1")
+            } else if (cookieHeaders.isNotEmpty()) {
+                setRequestProperty("Cookie", cookieHeaders.entries.joinToString("; ") { "${it.key}=${it.value}" })
+            }
             if (data != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
@@ -192,6 +194,10 @@ class HuaweiLegacyClient(hostInput: String) {
             val stream = if (code >= 400) c.errorStream else c.inputStream
             val body = stream?.use { BufferedReader(InputStreamReader(it, StandardCharsets.UTF_8)).readText() } ?: ""
             val setCookie = c.headerFields.filterKeys { it?.equals("Set-Cookie", true) == true }.values.flatten()
+            setCookie.forEach { header ->
+                val pair = header.substringBefore(';').split("=", limit = 2)
+                if (pair.size == 2 && pair[0].isNotBlank()) cookieHeaders[pair[0]] = pair[1]
+            }
             return HttpResult(code, body, setCookie, c.contentType)
         } finally { c.disconnect() }
     }
