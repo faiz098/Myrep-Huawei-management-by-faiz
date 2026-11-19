@@ -71,6 +71,7 @@ class HuaweiLegacyClient(hostInput: String) {
         val keys = linkedSetOf<String>()
         val fieldInventory = linkedSetOf<String>()
         val scriptClues = linkedSetOf<String>()
+        val contextClues = linkedSetOf<String>()
         val details = paths.map { path ->
             try {
                 val r = request(path, "GET", null, false)
@@ -110,7 +111,7 @@ class HuaweiLegacyClient(hostInput: String) {
                                 .replace(Regex("(?i)(PreSharedKey|WpaPsk|wlKeys[1-4]|onttoken|token)(\\\\s*[=:]\\\\s*['\\\"]?)[^'\\\";,}\\\\s<]+"), "$1$2***")
                                 .replace(Regex("[\\r\\n\\t]+"), " ")
                                 .take(420)
-                            scriptClues.add("KONTEKS[$marker]: $context")
+                            contextClues.add("KONTEKS[$marker]: $context")
                         }
                     }
                 }
@@ -118,11 +119,11 @@ class HuaweiLegacyClient(hostInput: String) {
                     if (isLogin(r.body)) "halaman login" else preview(r.body, 65)
             } catch (e: Exception) { "$path -> ${e.javaClass.simpleName}" }
         }
-        val summary = details.joinToString("\\n") +
-            "\\n\\nSSID ditemukan: " + (if (ssids.isEmpty()) "belum ditemukan" else ssids.joinToString("; ")) +
-            "\\nField kunci WiFi: " + (if (keys.isEmpty()) "belum teridentifikasi" else keys.joinToString("; ")) +
-            "\\n\\nINVENTARIS FIELD (nilai sensitif disamarkan):\\n" + fieldInventory.take(45).joinToString("\\n") +
-            "\\n\\nPETUNJUK SCRIPT: " + scriptClues.take(12).joinToString(" | ")
+        val summary = details.joinToString("\n") +
+            "\n\nSSID ditemukan: " + (if (ssids.isEmpty()) "belum ditemukan" else ssids.joinToString("; ")) +
+            "\nField kunci WiFi: " + (if (keys.isEmpty()) "belum teridentifikasi" else keys.joinToString("; ")) +
+            "\n\nINVENTARIS FIELD (nilai sensitif disamarkan):\n" + fieldInventory.take(45).joinToString("\\n") +
+            "\n\nPETUNJUK SCRIPT: " + contextClues.take(12).joinToString(" | ") + "\nPETUNJUK UMUM: " + scriptClues.take(6).joinToString(" | ")
         return WifiReadResult(summary, ssids.toList(), keys.toList())
     }
 
