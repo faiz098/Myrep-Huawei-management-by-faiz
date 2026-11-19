@@ -2,6 +2,8 @@ package id.myrep.huaweimanager
 import android.app.Activity
 import android.os.Bundle
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.net.wifi.WifiManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -56,6 +58,17 @@ class MainActivity : Activity() {
   page.addView(row,spacer(14));test.setOnClickListener{testConnection()};login.setOnClickListener{loginRouter()}
   val box=card();val head=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL}
   head.addView(label("STATUS & DIAGNOSTIK",11,muted,true),LinearLayout.LayoutParams(0,-2,1f))
+  val copy=button("Salin",false).apply{textSize=11f;minimumWidth=dp(64);minimumHeight=dp(36);setPadding(dp(8),0,dp(8),0)}
+  head.addView(copy,LinearLayout.LayoutParams(-2,dp(36)).apply{rightMargin=dp(8)})
+  copy.setOnClickListener{
+   val text=status.text?.toString().orEmpty()
+   if(text.isBlank()){Toast.makeText(this,"Belum ada diagnostik untuk disalin.",Toast.LENGTH_SHORT).show()}
+   else {
+    val clipboard=getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Status & Diagnostik MYREP",text))
+    Toast.makeText(this,"Status & diagnostik berhasil disalin.",Toast.LENGTH_SHORT).show()
+   }
+  }
   progress=ProgressBar(this).apply{visibility=View.GONE};head.addView(progress,LinearLayout.LayoutParams(dp(22),dp(22)))
   box.addView(head);status=label("Belum ada pengujian. Masukkan akun router lalu tekan Login Huawei.",13,ink).apply{setPadding(0,dp(12),0,0)}
   box.addView(status);page.addView(box,spacer(16))
