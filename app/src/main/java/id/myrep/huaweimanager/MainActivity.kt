@@ -77,10 +77,10 @@ class MainActivity : Activity() {
  private fun host()=ip.text.toString().trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
  private fun valid(s:String)=s.isNotBlank()&&!s.contains('/')&&!s.contains(' ')&&!s.contains(':')
  private fun testConnection(){val h=host();if(!valid(h)){show("Masukkan IP router yang valid.",false);return};busy("Menguji koneksi...")
-  worker.execute{val out=try{val a=InetAddress.getByName(h);if(!a.isSiteLocalAddress&&!a.isLoopbackAddress)error("Alamat bukan jaringan lokal");val c=URL("http://$h/").openConnection() as HttpURLConnection;c.connectTimeout=5000;c.readTimeout=5000;val code=c.responseCode;c.disconnect();"HTTP $code. Jalur jaringan tersedia, login belum terverifikasi."}catch(e:Exception){"Koneksi gagal: \${e.message}"};runOnUiThread{progress.visibility=View.GONE;login.isEnabled=true;show(out,out.startsWith("HTTP"))}}
+  worker.execute{val out=try{val a=InetAddress.getByName(h);if(!a.isSiteLocalAddress&&!a.isLoopbackAddress)error("Alamat bukan jaringan lokal");val c=URL("http://$h/").openConnection() as HttpURLConnection;c.connectTimeout=5000;c.readTimeout=5000;val code=c.responseCode;c.disconnect();"HTTP $code. Jalur jaringan tersedia, login belum terverifikasi."}catch(e:Exception){"Koneksi gagal: ${e.message}"};runOnUiThread{progress.visibility=View.GONE;login.isEnabled=true;show(out,out.startsWith("HTTP"))}}
  }
  private fun loginRouter(){val h=host();val u=user.text.toString().trim();val p=pass.text.toString();if(!valid(h)||u.isBlank()||p.isBlank()){show("Isi IP, username, dan password router.",false);return};busy("Memeriksa autentikasi Huawei...")
-  worker.execute{val c=HuaweiLegacyClient(h);val r=c.login(u,p);val w=if(r.success)"\\n\\nPEMBACAAN WLAN\\n\${c.readWifiSettings().summary}" else "";runOnUiThread{progress.visibility=View.GONE;login.isEnabled=true;show(r.message+w,r.success)}}
+  worker.execute{val c=HuaweiLegacyClient(h);val r=c.login(u,p);val w=if(r.success)"\n\nPEMBACAAN WLAN\n${c.readWifiSettings().summary}" else "";runOnUiThread{progress.visibility=View.GONE;login.isEnabled=true;show(r.message+w,r.success)}}
  }
  override fun onDestroy(){worker.shutdownNow();super.onDestroy()}
 }
