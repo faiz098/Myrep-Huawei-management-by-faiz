@@ -59,83 +59,98 @@ class HuaweiLegacyClient(hostInput: String) {
     }
 
     fun readWifiSettings(): WifiReadResult {
-        val paths = listOf(
+        val candidates = listOf(
             "/html/amp/wlanbasic/WlanBasic.asp",
             "/html/bbsp/wlan/wlanbasic.asp",
             "/html/amp/wlanbasic/wlan.asp",
             "/html/bbsp/wlan/wlan.asp"
         )
-        val ssids = linkedSetOf<String>()
-        val keys = linkedSetOf<String>()
-        val fieldInventory = linkedSetOf<String>()
-        val scriptClues = linkedSetOf<String>()
-        val contextClues = linkedSetOf<String>()
-        val details = paths.map { path ->
+        val attempts = mutableListOf<String>()
+        var pagePath: String? = null
+        var page = ""
+        for (path in candidates) {
             try {
                 val r = request(path, "GET", null, false)
-                if (r.code in 200..299 && !isLogin(r.body)) {
-                    Regex("(?is)<input\\b[^>]*>").findAll(r.body).forEach { m ->
-                        val tag = m.value
-                        val name = attr(tag, "name") ?: attr(tag, "id") ?: "(tanpa nama)"
-                        val type = attr(tag, "type") ?: "text"
-                        val value = attr(tag, "value") ?: ""
-                        val key = name.lowercase()
-                        val safeValue = if (key.contains("pass") || key.contains("psk") || key.contains("key") || key.contains("token") || key == "sid" || key.contains("cookie")) "***" else value.take(70)
-                        fieldInventory.add("$name [type=$type, value=$safeValue]")
-                        if (key.contains("ssid") && !key.contains("enable") && !key.contains("hide")) {
-                            if (value.isNotBlank()) ssids.add("$name = $value")
-                        }
-                        if (key.contains("wpa") || key.contains("pre_shared") || key.contains("keypass")) {
-                            if (value.isNotBlank() && !value.equals("on", true) && !value.equals("off", true)) keys.add("$name = *** (field terdeteksi)")
-                        }
-                    }
-                    Regex("(?is)<select\\b[^>]*>").findAll(r.body).forEach { m ->
-                        val tag = m.value
-                        val name = attr(tag, "name") ?: attr(tag, "id") ?: "(select)"
-                        fieldInventory.add("$name [select]")
-                    }
-                    val clueRegex = Regex("(?i).{0,65}(wlSsid|ssidName|WpaPsk|PreSharedKey|WlanBasic|wifiSsid).{0,90}")
-                    clueRegex.findAll(r.body).take(25).forEach { hit ->
-                        val clue = hit.value.replace(Regex("(?i)(WpaPsk|PreSharedKey|password|passwd|onttoken|token)([^,;{}]{0,70})"), "$1=***")
-                            .replace(Regex("[\\r\\n\\t]+"), " ").take(150)
-                        scriptClues.add(clue)
-                    }
-                    listOf("wlSsid1", "wlSsid2", "getValue('wlWpaPsk", "getValue('wlKeys1", "WLANConfiguration", "SelHighBand").forEach { marker ->
-                        val at = r.body.indexOf(marker, ignoreCase = true)
-                        if (at >= 0) {
-                            val from = (at - 220).coerceAtLeast(0)
-                            val to = (at + 360).coerceAtMost(r.body.length)
-                            val context = r.body.substring(from, to)
-                                .replace(Regex("(?i)(PreSharedKey|WpaPsk|wlKeys[1-4]|onttoken|token)(\\\\s*[=:]\\\\s*['\\\"]?)[^'\\\";,}\\\\s<]+"), "$1$2***")
-                                .replace(Regex("[\\r\\n\\t]+"), " ")
-                                .take(420)
-                            contextClues.add("KONTEKS[$marker]: $context")
-                        }
-                    }
+                attempts.add("$path -> HTTP ${r.code}, ${r.body.length} karakter")
+                if (r.code in 200..299 && !isLogin(r.body) && r.body.isNotBlank()) {
+                    pagePath = path
+                    page = r.body
+                    break
                 }
-                "$path -> HTTP ${r.code}, ${r.body.length} karakter, " +
-                    if (isLogin(r.body)) "halaman login" else preview(r.body, 65)
-            } catch (e: Exception) { "$path -> ${e.javaClass.simpleName}" }
+            } catch (e: Exception) {
+                attempts.add("$path -> ${e.javaClass.simpleName}")
+            }
         }
-        // Reuse the already-fetched successful page. Do not make a second
-        // unaudited request that could change session state or waste router traffic.
-        val firstWlanPage = paths.asSequence().mapNotNull { candidate ->
+        if (pagePath == null) {
+            return WifiReadResult(
+                "Halaman WLAN tidak berhasil dibaca.\n" + attempts.joinToString("\n"),
+                emptyList(),
+                emptyList()
+            )
+        }
+
+        val ssids = parseWlanWifiArray(page)
+        val inventory = linkedSetOf<String>()
+        val scripts = Regex("(?is)<script\\b[^>]*src\\s*=\\s*(['\\\"])(.*?)\\1[^>]*>")
+            .findAll(page).mapNotNull { it.groupValues[2].trim().takeIf(String::isNotBlank) }
+            .distinct().toList()
+        val inlineScript = Regex("(?is)<script\\b(?![^>]*src\\s*=)[^>]*>(.*?)</script>")
+            .findAll(page).joinToString("\n") { it.groupValues[1] }
+
+        fun auditSource(label: String, source: String) {
+            val patterns = listOf(
+                Regex("(?is).{0,180}function\\s+(?:stWlanWifi|[^\\s(]*(?:wlan|ssid|wifi|psk|pwd|save|submit|init)[^\\s(]*)\\s*\\([^)]*\\).{0,700}"),
+                Regex("(?is).{0,180}(?:XMLHttpRequest|\\$\\.ajax|\\$\\.post|\\$\\.get|ajax\\s*\\().{0,500}"),
+                Regex("(?is).{0,180}(?:\.\.\/|\/)[^'\\\"\\s<>]*(?:wlan|wifi|ajax|asp|cgi)[^'\\\"\\s<>]*.{0,100}")
+            )
+            patterns.forEach { pattern ->
+                pattern.findAll(source).take(16).forEach { match ->
+                    val safe = match.value
+                        .replace(Regex("(?i)(password|passwd|wpapsk|preSharedKey|wlKeys[1-4])\\s*([=:]\\s*['\\\"]?)[^'\\\";,}\\s<]+"), "$1$2***")
+                        .replace(Regex("[\\r\\n\\t]+"), " ")
+                        .take(520)
+                    inventory.add("$label: $safe")
+                }
+            }
+        }
+
+        auditSource("INLINE", inlineScript)
+        val scriptResults = mutableListOf<String>()
+        scripts.forEach { src ->
             try {
-                request(candidate, "GET", null, false).takeIf {
-                    it.code in 200..299 && !isLogin(it.body)
-                }?.body
-            } catch (_: Exception) { null }
-        }.firstOrNull().orEmpty()
-        parseWlanWifiArray(firstWlanPage).forEach { ssids.add(it) }
+                val resolved = when {
+                    src.startsWith("http://", true) || src.startsWith("https://", true) -> src
+                    src.startsWith("/") -> base + src
+                    else -> base + pagePath.substringBeforeLast('/') + "/" + src
+                }
+                // Only request scripts from this router. Never forward credentials to another host.
+                if (!resolved.startsWith(base + "/", true)) {
+                    scriptResults.add("$src -> dilewati (host eksternal)")
+                } else {
+                    val relative = resolved.removePrefix(base)
+                    val r = request(relative, "GET", null, false)
+                    scriptResults.add("$src -> HTTP ${r.code}, ${r.body.length} karakter")
+                    if (r.code in 200..299) auditSource(src.substringAfterLast('/'), r.body)
+                }
+            } catch (e: Exception) {
+                scriptResults.add("$src -> ${e.javaClass.simpleName}")
+            }
+        }
 
-        val summary = details.joinToString("\n") +
-            "\n\nSSID ditemukan: " + (if (ssids.isEmpty()) "belum ditemukan" else ssids.joinToString("; ")) +
-            "\nField kunci WiFi: " + (if (keys.isEmpty()) "belum teridentifikasi" else keys.joinToString("; ")) +
-            "\n\nINVENTARIS FIELD (nilai sensitif disamarkan):\n" + fieldInventory.take(45).joinToString("\n") +
-            "\n\nPETUNJUK SCRIPT: " + contextClues.take(12).joinToString(" | ") + "\nPETUNJUK UMUM: " + scriptClues.take(6).joinToString(" | ")
-        return WifiReadResult(summary, ssids.toList(), keys.toList())
+        val ssidLabels = ssids.joinToString("; ").ifBlank { "belum ditemukan" }
+        val summary = buildString {
+            append("HALAMAN WLAN: $pagePath (HTTP 200)\n")
+            append("Pemetaan profil dari WlanWifiArr: $ssidLabels\n")
+            append("File JavaScript eksternal:\n")
+            append(scriptResults.take(30).joinToString("\n").ifBlank { "Tidak ada script eksternal terdeteksi." })
+            append("\n\nPETUNJUK FUNGSI / REQUEST (hasil audit statis, bukan runtime):\n")
+            append(inventory.take(55).joinToString("\n").ifBlank { "Belum ditemukan pola fungsi/request yang cocok." })
+            append("\n\nBATASAN: WlanWifiArr adalah metadata JavaScript. Nilai status radio, channel, bandwidth, mode, keamanan, dan password belum dianggap terbaca sampai ada respons runtime yang terverifikasi.")
+            append("\n\nJalur yang diperiksa:\n")
+            append(attempts.joinToString("\n"))
+        }
+        return WifiReadResult(summary, ssids, emptyList())
     }
-
 
     private fun parseWlanWifiArray(html: String): List<String> {
         if (html.isBlank()) return emptyList()
