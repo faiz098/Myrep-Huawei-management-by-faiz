@@ -149,14 +149,14 @@ class HuaweiLegacyClient(hostInput: String) {
         val endpointAudit = linkedSetOf<String>()
         val functionNames = listOf(
             "SubmitForm", "addParameter1", "addParameter2", "addParameter3",
-            "webSubmitForm", "isBsdPskPwdChange", "CheckPskLenValid",
-            "SsidEnable", "ShowSsidEnable", "initWlanBasic", "initWlanCap",
-            "FirstRecordFor5G", "IsSetSsid5G", "isSetTriBand"
+            "AddParameter5G", "AddParaForCover", "webSubmitForm", "addParameter",
+            "isBsdPskPwdChange", "CheckPskLenValid", "SsidEnable", "ShowSsidEnable",
+            "initWlanBasic", "initWlanCap", "FirstRecordFor5G", "IsSetSsid5G", "isSetTriBand"
         )
         fun collectDeepAudit(label: String, source: String) {
             functionNames.forEach { name ->
                 extractJsFunction(source, name)?.let { extracted ->
-                    fullFunctionAudit.add("===== $label :: $name (${extracted.length} karakter) =====\n" + redactJsSecrets(extracted).take(8000) + if (extracted.length > 8000) "\n[Dipangkas pada 8.000 karakter; fungsi lengkap tersedia di source firmware]" else "")
+                    fullFunctionAudit.add("===== $label :: $name (${extracted.length} karakter) =====\n" + redactJsSecrets(extracted).take(30000) + if (extracted.length > 30000) "\n[Dipangkas pada 30.000 karakter]" else "")
                 }
             }
             Regex("""(?is)(?:set\.cgi|add\.cgi|del\.cgi|[A-Za-z0-9_./-]+\.asp(?:\?[^'"\s<>]*)?)[^'"\s<>]{0,300}""")
@@ -178,6 +178,18 @@ class HuaweiLegacyClient(hostInput: String) {
                 }
             } catch (_: Exception) { }
         }
+        // This auxiliary firmware page is not referenced as a script tag, so fetch it explicitly.
+        try {
+            val auxiliaryPath = "/html/amp/common/wlan_list.asp"
+            val auxiliary = request(auxiliaryPath, "GET", null, false)
+            scriptResults.add("$auxiliaryPath -> HTTP ${auxiliary.code}, ${auxiliary.body.length} karakter")
+            if (auxiliary.code in 200..299 && !isLogin(auxiliary.body)) {
+                collectDeepAudit("wlan_list.asp", auxiliary.body)
+            }
+        } catch (e: Exception) {
+            scriptResults.add("wlan_list.asp -> ${e.javaClass.simpleName}")
+        }
+
         val ssidLabels = ssids.joinToString("; ").ifBlank { "belum ditemukan" }
         val ssidSource = if (!formSsid24.isNullOrBlank() || !formSsid5.isNullOrBlank()) "nilai input form HTML firmware" else "fallback WlanWifiArr (metadata statis, bukan runtime)"
         val deviceClues = endpointAudit.filter {
