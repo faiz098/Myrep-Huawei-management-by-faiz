@@ -52,6 +52,11 @@ jobs:
             exit 1
           fi
 
+      - name: Inspect Kotlin source around reported error
+        shell: bash
+        run: |
+          sed -n '70,95p' "$PROJECT_DIR/app/src/main/java/id/myrep/huaweimanager/MainActivity.kt"
+
       - name: Build debug APK
         shell: bash
         run: |
