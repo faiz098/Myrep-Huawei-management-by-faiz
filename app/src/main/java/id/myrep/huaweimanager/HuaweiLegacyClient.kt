@@ -178,10 +178,12 @@ class HuaweiLegacyClient(hostInput: String) {
             setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36")
             setRequestProperty("Connection", "keep-alive")
             setRequestProperty("Referer", base + "/")
-            if (anonymous) {
-                setRequestProperty("Cookie", "Cookie=body:Language:english:id=-1")
-            } else if (cookieHeaders.isNotEmpty()) {
-                setRequestProperty("Cookie", cookieHeaders.entries.joinToString("; ") { "${it.key}=${it.value}" })
+            if (anonymous || cookieHeaders.isNotEmpty()) {
+                val outgoing = cookieHeaders.toMutableMap()
+                if (anonymous && !outgoing.containsKey("Cookie")) {
+                    outgoing["Cookie"] = "body:Language:english:id=-1"
+                }
+                setRequestProperty("Cookie", outgoing.entries.joinToString("; ") { "${it.key}=${it.value}" })
             }
             if (data != null) {
                 doOutput = true
