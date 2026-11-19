@@ -106,10 +106,10 @@ class MainActivity : Activity() {
    val row=LinearLayout(this).apply{orientation=1;setPadding(dp(12),dp(10),dp(12),dp(10));background=shape(Color.rgb(247,245,252),12)}
    row.addView(label(band,12,purple,true))
    row.addView(label(ssid,16,ink,true))
-   row.addView(label("Nilai dari WlanWifiArr. Belum diverifikasi sebagai SSID aktual router.",11,muted))
+   row.addView(label("SSID terdeteksi dari WlanWifiArr pada halaman konfigurasi Huawei.",11,muted))
    wifiPanel.addView(row,spacer(8))
   }
-  wifiPanel.addView(label("Status: kandidat konfigurasi. Pembacaan data runtime dan penyimpanan perubahan belum tersedia.",11,muted))
+  wifiPanel.addView(label("Catatan: SSID berhasil diekstrak dari metadata WLAN. Status radio dan protokol simpan konfigurasi belum diverifikasi, sehingga fitur ubah belum diaktifkan.",11,muted))
  }
  private fun host()=ip.text.toString().trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
  private fun valid(s:String)=s.isNotBlank()&&!s.contains('/')&&!s.contains(' ')&&!s.contains(':')
@@ -124,7 +124,7 @@ class MainActivity : Activity() {
    runOnUiThread{
     progress.visibility=View.GONE
     login.isEnabled=true
-    show(auth.message + if(wifi!=null) "\n\nPembacaan halaman WLAN selesai." else "",auth.success)
+    show(auth.message + if(wifi!=null) "\n\n" + wifi.summary else "",auth.success)
     if(wifi!=null) renderWifiCandidates(wifi.ssids)
    }
   }
