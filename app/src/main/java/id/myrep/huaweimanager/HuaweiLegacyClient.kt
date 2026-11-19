@@ -117,7 +117,8 @@ class HuaweiLegacyClient(hostInput: String) {
                     if (isLogin(r.body)) "halaman login" else preview(r.body, 65)
             } catch (e: Exception) { "$path -> ${e.javaClass.simpleName}" }
         }
-        // Huawei embeds WLANConfiguration and SSID metadata in WlanWifiArr.
+        // Reuse the already-fetched successful page. Do not make a second
+        // unaudited request that could change session state or waste router traffic.
         val firstWlanPage = paths.asSequence().mapNotNull { candidate ->
             try {
                 request(candidate, "GET", null, false).takeIf {
@@ -130,7 +131,7 @@ class HuaweiLegacyClient(hostInput: String) {
         val summary = details.joinToString("\n") +
             "\n\nSSID ditemukan: " + (if (ssids.isEmpty()) "belum ditemukan" else ssids.joinToString("; ")) +
             "\nField kunci WiFi: " + (if (keys.isEmpty()) "belum teridentifikasi" else keys.joinToString("; ")) +
-            "\n\nINVENTARIS FIELD (nilai sensitif disamarkan):\n" + fieldInventory.take(45).joinToString("\\n") +
+            "\n\nINVENTARIS FIELD (nilai sensitif disamarkan):\n" + fieldInventory.take(45).joinToString("\n") +
             "\n\nPETUNJUK SCRIPT: " + contextClues.take(12).joinToString(" | ") + "\nPETUNJUK UMUM: " + scriptClues.take(6).joinToString(" | ")
         return WifiReadResult(summary, ssids.toList(), keys.toList())
     }
