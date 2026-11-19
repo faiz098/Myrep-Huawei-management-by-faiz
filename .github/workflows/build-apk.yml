@@ -65,6 +65,18 @@ jobs:
         run: |
           sed -n '70,95p' "$PROJECT_DIR/app/src/main/java/id/myrep/huaweimanager/MainActivity.kt"
 
+      - name: Audit Huawei authentication implementation
+        shell: bash
+        run: |
+          SOURCE="$PROJECT_DIR/app/src/main/java/id/myrep/huaweimanager/HuaweiLegacyClient.kt"
+          if [ ! -f "$SOURCE" ]; then
+            echo "::error::HuaweiLegacyClient.kt not found in source archive."
+            exit 1
+          fi
+          echo "=== Huawei authentication and WLAN endpoint references ==="
+          grep -nEi 'GetRandCount|login\.cgi|GetRandToken|Cookie|Set-Cookie|x\.HW_Token|X_HW_Token|wlanbasic|WlanBasic|HttpURLConnection|POST|GET|ssid|pre_shared|wpa' "$SOURCE" || true
+          echo "=== Authentication source audit completed (static inspection only) ==="
+
       - name: Build debug APK
         shell: bash
         run: |
