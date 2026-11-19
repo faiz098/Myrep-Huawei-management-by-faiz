@@ -30,6 +30,19 @@ jobs:
           fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Package extracted source for review
+        shell: bash
+        run: |
+          mkdir -p review-source
+          cd "$PROJECT_DIR"
+          zip -qr "$GITHUB_WORKSPACE/review-source/myrep-source-expanded.zip" .
+      - name: Upload expanded source
+        uses: actions/upload-artifact@v4
+        with:
+          name: myrep-expanded-source-review
+          path: review-source/myrep-source-expanded.zip
+          if-no-files-found: error
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
