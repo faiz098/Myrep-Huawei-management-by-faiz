@@ -52,6 +52,14 @@ jobs:
             exit 1
           fi
 
+      - name: Fix Android EditText single-line API
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+          SOURCE="app/src/main/java/id/myrep/huaweimanager/MainActivity.kt"
+          sed -i 's/^[[:space:]]*singleLine = true$/        setSingleLine(true)/' "$SOURCE"
+          grep -n "setSingleLine(true)" "$SOURCE"
+
       - name: Inspect Kotlin source around reported error
         shell: bash
         run: |
