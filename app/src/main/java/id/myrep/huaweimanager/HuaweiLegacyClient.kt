@@ -240,7 +240,7 @@ class HuaweiLegacyClient(hostInput: String) {
             Regex("""(?is)((?:password|passwd|wpapsk|preSharedKey|wlKeys[1-4]|onttoken|token|sid)\s*[:=]\s*)[^,;\s}]+"""),
             "$1***"
         )
-        return safe.take(18000)
+        return safe.take(50000)
     }
 
     private fun parseWlanWifiArray(html: String): List<String> {
