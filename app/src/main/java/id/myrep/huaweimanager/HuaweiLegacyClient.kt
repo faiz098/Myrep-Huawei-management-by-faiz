@@ -75,7 +75,7 @@ class HuaweiLegacyClient(hostInput: String) {
             try {
                 val r = request(path, "GET", null, false)
                 if (r.code in 200..299 && !isLogin(r.body)) {
-                    Regex("(?is)<input\\\\b[^>]*>").findAll(r.body).forEach { m ->
+                    Regex("(?is)<input\\b[^>]*>").findAll(r.body).forEach { m ->
                         val tag = m.value
                         val name = attr(tag, "name") ?: attr(tag, "id") ?: "(tanpa nama)"
                         val type = attr(tag, "type") ?: "text"
@@ -90,7 +90,7 @@ class HuaweiLegacyClient(hostInput: String) {
                             if (value.isNotBlank() && !value.equals("on", true) && !value.equals("off", true)) keys.add("$name = *** (field terdeteksi)")
                         }
                     }
-                    Regex("(?is)<select\\\\b[^>]*>").findAll(r.body).forEach { m ->
+                    Regex("(?is)<select\\b[^>]*>").findAll(r.body).forEach { m ->
                         val tag = m.value
                         val name = attr(tag, "name") ?: attr(tag, "id") ?: "(select)"
                         fieldInventory.add("$name [select]")
