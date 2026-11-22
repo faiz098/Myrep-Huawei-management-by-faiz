@@ -150,10 +150,7 @@ class HuaweiLegacyClient(hostInput: String) {
         // Focused write-path audit only. Keep this list deliberately small so
         // the result can be copied from the app without unrelated firmware noise.
         val functionNames = listOf(
-            "SubmitForm", "webSubmitForm", "addParameter", "addParameter1",
-            "addParameter2", "addParameter3", "AddParameter5G", "AddParaForCover",
-            "setAction", "submit", "submitForm", "isValidKey",
-            "isWlanInitFinished", "getValue"
+            "webSubmitForm", "addParameter", "setAction", "submit"
         )
         fun collectDeepAudit(label: String, source: String) {
             functionNames.forEach { name ->
