@@ -25,6 +25,7 @@ class MainActivity : Activity() {
  private lateinit var login:Button
  private lateinit var progress:ProgressBar
  private lateinit var wifiPanel:LinearLayout
+ private var activeClient:HuaweiLegacyClient?=null
  private lateinit var dashboardPanel:LinearLayout
  private val purple=Color.rgb(91,45,170)
  private val ink=Color.rgb(31,35,48)
@@ -118,7 +119,7 @@ class MainActivity : Activity() {
   dashboardPanel.addView(label("WiFi 5 GHz",12,purple,true),spacer(3))
   dashboardPanel.addView(label(ssids.firstOrNull{it.startsWith("5 GHz:")}?.substringAfter(":")?.trim() ?: "Belum terbaca",14,ink,true))
  }
- private fun renderWifiCandidates(items:List<String>,diagnostics:List<String>){
+ private fun renderWifiCandidates(items:List<String>,diagnostics:List<String>,domains:Map<String,String>){
   wifiPanel.removeAllViews()
   wifiPanel.visibility=View.VISIBLE
   wifiPanel.addView(label("PENGELOLAAN WI-FI",15,ink,true),spacer(8))
@@ -133,12 +134,33 @@ class MainActivity : Activity() {
    row.addView(label("Channel / bandwidth: belum diverifikasi",12,muted))
    row.addView(label("Mode / security: belum diverifikasi",12,muted))
    row.addView(label("Password: tidak dibaca demi keamanan; kemampuan firmware belum diverifikasi",12,muted),spacer(8))
-   val actions=LinearLayout(this).apply{orientation=0}
-   listOf("Edit SSID","Edit Password","Simpan").forEach { title ->
-    val b=button(title,false).apply{isEnabled=false;alpha=0.48f;textSize=10f}
-    actions.addView(b,LinearLayout.LayoutParams(0,dp(42),1f).apply{if(title!="Edit SSID")leftMargin=dp(5)})
+   val passwordInput=field("Password Wi-Fi baru (8-63 karakter)").apply{inputType=129}
+   row.addView(fieldLabel("Ubah password $band"))
+   row.addView(passwordInput,spacer(8))
+   val saveButton=button("Simpan password",true)
+   row.addView(saveButton,spacer(5))
+   saveButton.setOnClickListener {
+    val domain=domains[band]
+    val value=passwordInput.text.toString()
+    if(domain.isNullOrBlank()) {
+     show("Domain $band belum terdeteksi dari metadata firmware. Penyimpanan dibatalkan.",false)
+    } else if(value.length !in 8..63 || value.any{it.isWhitespace() || it.code<32 || it.code>126}) {
+     show("Password harus 8-63 karakter ASCII tanpa spasi.",false)
+    } else {
+     saveButton.isEnabled=false
+     progress.visibility=View.VISIBLE
+     show("Mengirim perubahan password $band ke router...",true)
+     worker.execute {
+      val result=activeClient?.saveWifiPassword(domain,value) ?: "Sesi router tidak tersedia. Login ulang."
+      runOnUiThread {
+       progress.visibility=View.GONE
+       saveButton.isEnabled=true
+       passwordInput.text.clear()
+       show(result,result.startsWith("POST dikirim"))
+      }
+     }
+    }
    }
-   row.addView(actions)
    wifiPanel.addView(row,spacer(10))
   }
   wifiPanel.addView(label("DIAGNOSTIK YANG PERLU DIKIRIM",14,ink,true),spacer(6))
@@ -182,8 +204,8 @@ class MainActivity : Activity() {
     progress.visibility=View.GONE
     login.isEnabled=true
     show(auth.message + if(wifi!=null) "\n\n" + wifi.summary else "",auth.success)
-    if(auth.success) renderDashboard(h,u,wifi)
-    if(wifi!=null) renderWifiCandidates(wifi.ssids,wifi.diagnosticSections)
+    if(auth.success) { activeClient=client; renderDashboard(h,u,wifi) }
+    if(wifi!=null) renderWifiCandidates(wifi.ssids,wifi.diagnosticSections,wifi.ssidDomains)
    }
   }
  }
