@@ -154,7 +154,11 @@ class HuaweiLegacyClient(hostInput: String) {
             // needed to reconstruct the exact WLAN form payload.
             "SubmitForm", "webSubmitForm", "addParameter", "setAction", "submit",
             "addParameter1", "addParameter2", "AddParaForCover", "AddParameter5G",
-            "getValue", "getElement", "MakeCheckBoxValue", "isWlanInitFinished"
+            "getValue", "getElement", "getDomainName", "getSelectVal",
+            "MakeCheckBoxValue", "isWlanInitFinished",
+            "IsSetSsid5G", "IsSsid5GExist", "setCoverSsidNotifyFlag",
+            "isValIdRule", "isValPWDRule", "getNewSubmitForm",
+            "createNewFormElement", "setMethod", "addForm", "addDiv"
         )
         fun collectDeepAudit(label: String, source: String) {
             functionNames.forEach { name ->
@@ -233,7 +237,7 @@ class HuaweiLegacyClient(hostInput: String) {
                 val found = selected.any { it.contains(":: $name (") }
                 append("$name: ${if (found) "DITEMUKAN" else "TIDAK DITEMUKAN"}\n")
             }
-            append("\nBATASAN: audit hanya mengekstrak empat fungsi di atas. Tidak menjalankan JavaScript, tidak mengirim POST, dan tidak mengubah router. Nilai rahasia disamarkan otomatis.")
+            append("\nBATASAN: audit mengekstrak fungsi target dan helper yang terdaftar di atas. JavaScript tidak dieksekusi, POST tidak dikirim, dan router tidak diubah. Nilai rahasia disamarkan otomatis.")
             append("\n\nSUMBER JAVASCRIPT YANG DIPERIKSA:\n")
             append(scriptResults.joinToString("\n").ifBlank { "Tidak ada sumber JavaScript eksternal." })
         }
