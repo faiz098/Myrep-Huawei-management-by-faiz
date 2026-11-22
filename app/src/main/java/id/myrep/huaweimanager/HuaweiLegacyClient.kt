@@ -17,7 +17,7 @@ class HuaweiLegacyClient(hostInput: String) {
     private var sessionToken: String? = null
 
     data class LoginResult(val success: Boolean, val message: String)
-    data class WifiReadResult(val summary: String, val ssids: List<String>, val passwordFields: List<String>)
+    data class WifiReadResult(val summary: String, val ssids: List<String>, val passwordFields: List<String>, val diagnosticSections: List<String> = emptyList())
     private data class HttpResult(val code: Int, val body: String, val setCookie: List<String>, val type: String?)
 
     fun login(username: String, password: String): LoginResult {
@@ -236,7 +236,7 @@ class HuaweiLegacyClient(hostInput: String) {
             append("\n\nSUMBER JAVASCRIPT YANG DIPERIKSA:\n")
             append(scriptResults.joinToString("\n").ifBlank { "Tidak ada sumber JavaScript eksternal." })
         }
-        return WifiReadResult(summary, ssids, emptyList())
+        return WifiReadResult(summary, ssids, emptyList(), selected)
     }
 
     // Extract a complete named JavaScript function without executing it.
