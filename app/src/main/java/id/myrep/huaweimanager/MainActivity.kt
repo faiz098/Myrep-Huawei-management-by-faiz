@@ -142,11 +142,11 @@ class MainActivity : Activity() {
    wifiPanel.addView(row,spacer(10))
   }
   wifiPanel.addView(label("DIAGNOSTIK YANG PERLU DIKIRIM",14,ink,true),spacer(6))
-  wifiPanel.addView(label("Setiap fungsi dipisah agar bisa disalin satu per satu. Bagian panjang otomatis dibagi menjadi potongan maksimal 3.000 karakter. Kirim sesuai urutan nama fungsi dan nomor potongan.",11,muted),spacer(8))
+  wifiPanel.addView(label("Hanya 4 fungsi inti. Setiap tombol menyalin maksimal 300 karakter. Kirim potongan sesuai nomor.",11,muted),spacer(8))
   diagnostics.forEachIndexed { index, section ->
    val title=section.lineSequence().firstOrNull()?.take(110) ?: "Bagian diagnostik $index"
    val body=section
-   val chunks=body.chunked(3000)
+   val chunks=body.chunked(300)
    val group=LinearLayout(this).apply{orientation=1;setPadding(dp(10),dp(10),dp(10),dp(10));background=shape(Color.rgb(247,245,252),12)}
    group.addView(label(title,11,purple,true),spacer(5))
    group.addView(label("Total ${body.length} karakter • ${chunks.size} potongan",10,muted),spacer(5))
