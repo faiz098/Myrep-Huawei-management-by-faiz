@@ -212,13 +212,13 @@ class HuaweiLegacyClient(hostInput: String) {
 
         val ssidLabels = ssids.joinToString("; ").ifBlank { "belum ditemukan" }
         val ssidSource = if (!formSsid24.isNullOrBlank() || !formSsid5.isNullOrBlank()) "nilai input form HTML firmware" else "fallback WlanWifiArr (metadata statis, bukan runtime)"
+        val selected = fullFunctionAudit.distinct()
         val summary = buildString {
             append("AUDIT TERFOKUS: JALUR SIMPAN WIFI HUAWEI\n")
             append("Router page: $pagePath (HTTP 200)\n")
             append("SSID terdeteksi: $ssidLabels\n")
             append("Sumber SSID: $ssidSource\n")
             append("FUNGSI YANG DIMINTA SAJA (source JavaScript, tidak dieksekusi):\n")
-            val selected = fullFunctionAudit.distinct()
             append(selected.joinToString("\n\n").ifBlank {
                 "Fungsi target belum ditemukan pada JavaScript yang berhasil dibaca."
             })
@@ -229,7 +229,7 @@ class HuaweiLegacyClient(hostInput: String) {
                 val found = selected.any { it.contains(":: $name (") }
                 append("$name: ${if (found) "DITEMUKAN" else "TIDAK DITEMUKAN"}\n")
             }
-            append("\nBATASAN: audit hanya mengekstrak enam fungsi di atas. Tidak menjalankan JavaScript, tidak mengirim POST, dan tidak mengubah router. Nilai rahasia disamarkan otomatis.")
+            append("\nBATASAN: audit hanya mengekstrak empat fungsi di atas. Tidak menjalankan JavaScript, tidak mengirim POST, dan tidak mengubah router. Nilai rahasia disamarkan otomatis.")
             append("\n\nSUMBER JAVASCRIPT YANG DIPERIKSA:\n")
             append(scriptResults.joinToString("\n").ifBlank { "Tidak ada sumber JavaScript eksternal." })
         }
