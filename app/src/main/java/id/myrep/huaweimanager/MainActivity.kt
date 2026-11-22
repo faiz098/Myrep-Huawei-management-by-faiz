@@ -118,7 +118,7 @@ class MainActivity : Activity() {
   dashboardPanel.addView(label("WiFi 5 GHz",12,purple,true),spacer(3))
   dashboardPanel.addView(label(ssids.firstOrNull{it.startsWith("5 GHz:")}?.substringAfter(":")?.trim() ?: "Belum terbaca",14,ink,true))
  }
- private fun renderWifiCandidates(items:List<String>){
+ private fun renderWifiCandidates(items:List<String>,diagnostics:List<String>){
   wifiPanel.removeAllViews()
   wifiPanel.visibility=View.VISIBLE
   wifiPanel.addView(label("PENGELOLAAN WI-FI",15,ink,true),spacer(8))
@@ -141,7 +141,29 @@ class MainActivity : Activity() {
    row.addView(actions)
    wifiPanel.addView(row,spacer(10))
   }
+  wifiPanel.addView(label("DIAGNOSTIK YANG PERLU DIKIRIM",14,ink,true),spacer(6))
+  wifiPanel.addView(label("Setiap fungsi dipisah agar bisa disalin satu per satu. Bagian panjang otomatis dibagi menjadi potongan maksimal 3.000 karakter. Kirim sesuai urutan nama fungsi dan nomor potongan.",11,muted),spacer(8))
+  diagnostics.forEachIndexed { index, section ->
+   val title=section.lineSequence().firstOrNull()?.take(110) ?: "Bagian diagnostik $index"
+   val body=section
+   val chunks=body.chunked(3000)
+   val group=LinearLayout(this).apply{orientation=1;setPadding(dp(10),dp(10),dp(10),dp(10));background=shape(Color.rgb(247,245,252),12)}
+   group.addView(label(title,11,purple,true),spacer(5))
+   group.addView(label("Total ${body.length} karakter • ${chunks.size} potongan",10,muted),spacer(5))
+   chunks.forEachIndexed { part, chunk ->
+    val b=button("Salin ${part+1}/${chunks.size}",false).apply{textSize=11f}
+    b.setOnClickListener{copyDiagnostic(chunk,"Bagian ${index+1}, potongan ${part+1}")}
+    group.addView(b,spacer(5))
+   }
+   wifiPanel.addView(group,spacer(8))
+  }
+  if(diagnostics.isEmpty()) wifiPanel.addView(label("Belum ada fungsi yang berhasil diekstrak. Periksa status diagnostik di atas.",11,muted),spacer(8))
   wifiPanel.addView(label("Tombol perubahan belum diaktifkan. Firmware belum mengungkap dan memverifikasi endpoint serta parameter simpan. Aplikasi tidak mengirim perubahan ke router.",11,muted))
+ }
+ private fun copyDiagnostic(value:String,description:String){
+  val clipboard=getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+  clipboard.setPrimaryClip(ClipData.newPlainText(description,value))
+  Toast.makeText(this,"$description disalin. Tempelkan ke chat.",Toast.LENGTH_SHORT).show()
  }
  private fun host()=ip.text.toString().trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
  private fun valid(s:String)=s.isNotBlank()&&!s.contains('/')&&!s.contains(' ')&&!s.contains(':')
@@ -158,7 +180,7 @@ class MainActivity : Activity() {
     login.isEnabled=true
     show(auth.message + if(wifi!=null) "\n\n" + wifi.summary else "",auth.success)
     if(auth.success) renderDashboard(h,u,wifi)
-    if(wifi!=null) renderWifiCandidates(wifi.ssids)
+    if(wifi!=null) renderWifiCandidates(wifi.ssids,wifi.diagnosticSections)
    }
   }
  }
