@@ -142,11 +142,14 @@ class MainActivity : Activity() {
    wifiPanel.addView(row,spacer(10))
   }
   wifiPanel.addView(label("DIAGNOSTIK YANG PERLU DIKIRIM",14,ink,true),spacer(6))
-  wifiPanel.addView(label("Hanya 4 fungsi inti. Setiap tombol menyalin maksimal 300 karakter. Kirim potongan sesuai nomor.",11,muted),spacer(8))
+  wifiPanel.addView(label("Setiap fungsi dibagi maksimal 4 potongan dengan ukuran seimbang. Kirim semua potongan sesuai nomor.",11,muted),spacer(8))
   diagnostics.forEachIndexed { index, section ->
    val title=section.lineSequence().firstOrNull()?.take(110) ?: "Bagian diagnostik $index"
    val body=section
-   val chunks=body.chunked(300)
+   // Keep each function to at most four copy actions, regardless of source length.
+   // Split evenly so long firmware functions do not create dozens of tiny fragments.
+   val chunkSize=if(body.isEmpty()) 1 else (body.length+3)/4
+   val chunks=body.chunked(chunkSize)
    val group=LinearLayout(this).apply{orientation=1;setPadding(dp(10),dp(10),dp(10),dp(10));background=shape(Color.rgb(247,245,252),12)}
    group.addView(label(title,11,purple,true),spacer(5))
    group.addView(label("Total ${body.length} karakter • ${chunks.size} potongan",10,muted),spacer(5))
