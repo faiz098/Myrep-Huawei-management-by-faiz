@@ -225,8 +225,8 @@ class HuaweiLegacyClient(hostInput: String) {
             append(selected.joinToString("\n\n").ifBlank {
                 "Fungsi target belum ditemukan pada JavaScript yang berhasil dibaca."
             })
-            append("\\nSKEMA FORM WLAN (nilai rahasia disamarkan):\\n")
-            append(formSchema.joinToString("\\n").ifBlank { "Tidak ada field form yang berhasil diekstrak." })
+            append("\nSKEMA FORM WLAN (nilai rahasia disamarkan):\n")
+            append(formSchema.joinToString("\n").ifBlank { "Tidak ada field form yang berhasil diekstrak." })
             append("\n\nRINGKASAN KELENGKAPAN:\n")
             functionNames.forEach { name ->
                 val found = selected.any { it.contains(":: $name (") }
