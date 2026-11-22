@@ -150,12 +150,10 @@ class HuaweiLegacyClient(hostInput: String) {
         // Focused write-path audit only. Keep this list deliberately small so
         // the result can be copied from the app without unrelated firmware noise.
         val functionNames = listOf(
-            "SubmitForm",
-            "webSubmitForm",
-            "addParameter1",
-            "addParameter2",
-            "AddParameter5G",
-            "AddParaForCover"
+            "SubmitForm", "webSubmitForm", "addParameter", "addParameter1",
+            "addParameter2", "addParameter3", "AddParameter5G", "AddParaForCover",
+            "setAction", "submit", "submitForm", "isValidKey",
+            "isWlanInitFinished", "getValue"
         )
         fun collectDeepAudit(label: String, source: String) {
             functionNames.forEach { name ->
@@ -192,6 +190,29 @@ class HuaweiLegacyClient(hostInput: String) {
             scriptResults.add("wlan_list.asp -> ${e.javaClass.simpleName}")
         }
 
+        // Capture the firmware's exact WLAN form schema; secret values are never emitted.
+        val formSchema = buildList {
+            Regex("(?is)<form\\b[^>]*>").findAll(page).forEachIndexed { index, match ->
+                val tag = match.value
+                add("FORM[$index] action=${attr(tag, "action") ?: "(default)"} method=${attr(tag, "method") ?: "GET"} name=${attr(tag, "name") ?: "(tanpa nama)"}")
+            }
+            Regex("(?is)<input\\b[^>]*>").findAll(page).forEach { match ->
+                val tag = match.value
+                val name = attr(tag, "name") ?: attr(tag, "id") ?: "(tanpa nama)"
+                val type = attr(tag, "type") ?: "text"
+                val secret = type.equals("password", true) || name.contains("key", true) || name.contains("pass", true) || name.contains("token", true)
+                val value = if (secret) "***" else (attr(tag, "value") ?: "").take(100)
+                add("INPUT name=$name type=$type value=$value")
+            }
+            Regex("(?is)<select\\b[^>]*>").findAll(page).forEach { match ->
+                val tag = match.value
+                add("SELECT name=${attr(tag, "name") ?: attr(tag, "id") ?: "(tanpa nama)"}")
+            }
+            Regex("(?is)<(?:button|input)\\b[^>]*(?:onclick|onsubmit)\\s*=\\s*(['\"])(.*?)\\1[^>]*>").findAll(page).forEach {
+                add("HANDLER ${it.value.take(260)}")
+            }
+        }.distinct()
+
         val ssidLabels = ssids.joinToString("; ").ifBlank { "belum ditemukan" }
         val ssidSource = if (!formSsid24.isNullOrBlank() || !formSsid5.isNullOrBlank()) "nilai input form HTML firmware" else "fallback WlanWifiArr (metadata statis, bukan runtime)"
         val summary = buildString {
@@ -204,6 +225,8 @@ class HuaweiLegacyClient(hostInput: String) {
             append(selected.joinToString("\n\n").ifBlank {
                 "Fungsi target belum ditemukan pada JavaScript yang berhasil dibaca."
             })
+            append("\\nSKEMA FORM WLAN (nilai rahasia disamarkan):\\n")
+            append(formSchema.joinToString("\\n").ifBlank { "Tidak ada field form yang berhasil diekstrak." })
             append("\n\nRINGKASAN KELENGKAPAN:\n")
             functionNames.forEach { name ->
                 val found = selected.any { it.contains(":: $name (") }
