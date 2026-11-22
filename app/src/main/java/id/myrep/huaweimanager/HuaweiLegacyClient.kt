@@ -17,7 +17,7 @@ class HuaweiLegacyClient(hostInput: String) {
     private var sessionToken: String? = null
 
     data class LoginResult(val success: Boolean, val message: String)
-    data class WifiReadResult(val summary: String, val ssids: List<String>, val passwordFields: List<String>, val diagnosticSections: List<String> = emptyList())
+    data class WifiReadResult(val summary: String, val ssids: List<String>, val passwordFields: List<String>, val diagnosticSections: List<String> = emptyList(), val ssidDomains: Map<String, String> = emptyMap())
     private data class HttpResult(val code: Int, val body: String, val setCookie: List<String>, val type: String?)
 
     fun login(username: String, password: String): LoginResult {
@@ -241,7 +241,7 @@ class HuaweiLegacyClient(hostInput: String) {
             append("\n\nSUMBER JAVASCRIPT YANG DIPERIKSA:\n")
             append(scriptResults.joinToString("\n").ifBlank { "Tidak ada sumber JavaScript eksternal." })
         }
-        return WifiReadResult(summary, ssids, emptyList(), selected)
+        return WifiReadResult(summary, ssids, emptyList(), selected, parseWlanWifiDomains(page))
     }
 
     // Extract a complete named JavaScript function without executing it.
@@ -312,6 +312,69 @@ class HuaweiLegacyClient(hostInput: String) {
             }
         }
         return null
+    }
+
+    private fun parseWlanWifiDomains(html: String): Map<String, String> {
+        val body = Regex("(?is)WlanWifiArr\\s*=\\s*new\\s+Array\\((.*?)\\);")
+            .find(html)?.groupValues?.get(1) ?: return emptyMap()
+        val constructors = Regex("(?is)new\\s+stWlanWifi\\((.*?)\\)")
+        val quoted = Regex("""("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')""")
+        val result = linkedMapOf<String, String>()
+        constructors.findAll(body).forEach { match ->
+            val args = quoted.findAll(match.groupValues[1]).map { token ->
+                token.value.substring(1, token.value.length - 1)
+                    .replace(Regex("""\\x([0-9a-fA-F]{2})""")) { m -> m.groupValues[1].toInt(16).toChar().toString() }
+                    .replace("\\\\", "\\")
+            }.toList()
+            if (args.size >= 4) {
+                val domain = args[0].trim()
+                val band = when {
+                    domain.contains("WLANConfiguration.1") -> "2.4 GHz"
+                    domain.contains("WLANConfiguration.5") -> "5 GHz"
+                    else -> null
+                }
+                if (band != null && domain.startsWith("InternetGatewayDevice.") && domain.contains("WLANConfiguration.")) {
+                    result[band] = domain
+                }
+            }
+        }
+        return result
+    }
+
+    /**
+     * Sends a password update using the Huawei WLAN set.cgi form pattern found
+     * in the firmware SubmitForm() source. This does not expose credentials or
+     * session tokens in diagnostics.
+     */
+    fun saveWifiPassword(domain: String, password: String): String {
+        if (domain.isBlank() || !domain.startsWith("InternetGatewayDevice.") ||
+            !domain.contains("WLANConfiguration.")) {
+            return "GAGAL: domain WLAN tidak valid."
+        }
+        if (password.length < 8 || password.length > 63 ||
+            password.any { it.isWhitespace() || it.code < 32 || it.code > 126 }) {
+            return "GAGAL: password harus 8-63 karakter ASCII tanpa spasi."
+        }
+        val token = sessionToken?.takeIf { it.isNotBlank() }
+            ?: return "GAGAL: token sesi tidak tersedia. Login ulang ke router."
+        if (cookieHeaders.isEmpty()) return "GAGAL: sesi router tidak tersedia. Login ulang."
+
+        return try {
+            val query = "y=" + enc(domain) + "&k=" + enc("$domain.PreSharedKey.1")
+            val body = listOf(
+                "k.PreSharedKey" to password,
+                "x.X_HW_Token" to token
+            ).joinToString("&") { (key, value) -> enc(key) + "=" + enc(value) }
+            val reply = request("/html/amp/wlanbasic/set.cgi?$query", "POST", body, false)
+            when {
+                reply.code !in 200..299 -> "GAGAL: router mengembalikan HTTP ${reply.code}. Periksa sesi dan firmware."
+                isLogin(reply.body) -> "GAGAL: sesi login kedaluwarsa. Login ulang."
+                reply.body.contains("error", true) || reply.body.contains("failure", true) -> "Router memberi respons yang mengindikasikan kegagalan (HTTP ${reply.code})."
+                else -> "POST dikirim dan router merespons HTTP ${reply.code}. Password belum dapat diverifikasi dengan pembacaan ulang karena firmware menyamarkan nilai kunci. Periksa koneksi Wi-Fi sebelum menganggap perubahan berhasil."
+            }
+        } catch (e: Exception) {
+            "GAGAL: ${e.javaClass.simpleName}. Periksa koneksi dan login router."
+        }
     }
 
     private fun parseWlanWifiArray(html: String): List<String> {
